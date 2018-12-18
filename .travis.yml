@@ -1,7 +1,5 @@
 language: go
 
-os: osx
-
 matrix:
   include:
   - go: master
