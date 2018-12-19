@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"regexp"
 
 	"github.com/Dids/rustbot/eventhandler"
 	"github.com/sacOO7/gowebsocket"
@@ -11,8 +12,11 @@ import (
 
 var eventHandler *eventhandler.EventHandler
 var discordMessageHandler chan eventhandler.Message
-
 var websocketClient gowebsocket.Socket
+
+var chatRegex, _ = regexp.Compile(`\[CHAT\] (.+?)\[[0-9]+\/([0-9]+)\] : (.*)`)
+var joinRegex, _ = regexp.Compile(`(.*):([0-9]+)+\/([0-9]+)+\/(.+?) joined \[(.*)\/([0-9]+)]`)
+var disconnectRegex, _ = regexp.Compile(`(.*):([0-9]+)+\/([0-9]+)+\/(.+?) disconnecting: (.*)`)
 
 // PacketType represents the type of a webrcon packet
 type PacketType string
@@ -49,10 +53,27 @@ type Packet struct {
 // ChatPacket represents a single webrcon chat packet
 type ChatPacket struct {
 	Message  string `json:"Message"`
-	UserID   uint64 `json:"UserId"`
+	UserID   string `json:"UserId"`
 	Username string `json:"Username"`
 	Color    string `json:"Color"`
 	Time     uint64 `json:"Time"`
+}
+
+// JoinPacket represents a single webrcon join packet
+type JoinPacket struct {
+	IP       string `json:"IP"`
+	Port     string `json:"Port"`
+	UserID   string `json:"UserId"`
+	Username string `json:"Username"`
+	OS       string `json:"OS"`
+}
+
+// DisconnectPacket represents a single webrcon disconnect packet
+type DisconnectPacket struct {
+	IP       string `json:"IP"`
+	Port     string `json:"Port"`
+	UserID   string `json:"UserId"`
+	Username string `json:"Username"`
 }
 
 // Initialize will create and open a new Webrcon connection
@@ -69,58 +90,34 @@ func Initialize(handler *eventhandler.EventHandler) {
 
 	websocketClient.OnConnectError = func(err error, socket gowebsocket.Socket) {
 		log.Println("Received connect error ", err)
+
+		// Notify the primary process to shut down
+		process, _ := os.FindProcess(os.Getpid())
+		process.Signal(os.Interrupt)
+		return
 	}
 
 	websocketClient.OnTextMessage = func(message string, socket gowebsocket.Socket) {
 		// log.Println("Received message " + message)
 
-		// TODO: Also note that "Type: Chat" when it's a chat message!
-		// FIXME: If "Identifier: -1", then we need to parse the packet a bit differently (NOTE: Looks like -1 is always a "chat packet"?):
-		/*
-			2018/12/19 10:00:25 Received message {
-				"Message": "[CHAT] [ Kela ] Kotka[9574375/76561198402727161] : vähä aja päästä ois kai wipee jos kukaa on selannu tota discordia :D",
-				"Identifier": 0,
-				"Type": "Generic",
-				"Stacktrace": ""
-			}
-			2018/12/19 10:00:25 Received message {
-				"Message": "{\n  \"Message\": \"vähä aja päästä ois kai wipee jos kukaa on selannu tota discordia :D\",\n  \"UserId\": 76561198402727161,\n  \"Username\": \"[ Kela ] Kotka\",\n  \"Color\": \"#5af\",\n  \"Time\": 1545206425\n}",
-				"Identifier": -1,
-				"Type": "Chat",
-				"Stacktrace": null
-			}
-		*/
+		// FIXME: Remove these when done
+		// message = `{ "Message": "109.240.100.173:18521/76561198806240991/Veru joined [windows/76561198806240991]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		// message = `{ "Message": "109.240.100.173:18521/76561198806240991/Veru disconnecting: disconnect", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 
 		// Parse the incoming message as a webrcon packet
 		packet := Packet{}
 		if parseErr := json.Unmarshal([]byte(message), &packet); parseErr != nil {
-			log.Println("ERROR: Failed to parse incoming message:", message, parseErr)
+			log.Println("ERROR: Failed to parse as generic message:", message, parseErr)
 		}
-		log.Println("Parsed message as packet:", packet)
-
-		// TODO: Ideally we'd also need to parse connect and disconnect messages
-		/*
-			2018/12/19 11:09:10 Received message {
-				"Message": "samppe[8194483/76561197991428801] has entered the game",
-				"Identifier": 0,
-				"Type": "Generic",
-				"Stacktrace": ""
-			}
-			2018/12/19 10:56:25 Received message {
-				"Message": "Saved 34,590 ents, cache(0.01), write(0.01), disk(0.00).",
-				"Identifier": 0,
-				"Type": "Generic",
-				"Stacktrace": ""
-			}
-		*/
+		// log.Println("Parsed message as packet:", packet)
 
 		// Handle different type conversions
 		if packet.Identifier == ChatIdentifier && packet.Type == ChatType {
 			chatPacket := ChatPacket{}
 			if parseErr := json.Unmarshal([]byte(packet.Message), &chatPacket); parseErr != nil {
-				log.Println("ERROR: Failed to parse incoming message:", parseErr)
+				log.Println("ERROR: Failed to parse as chat message:", parseErr)
 			}
-			log.Println("Parsed message as chat packet:", chatPacket)
+			// log.Println("Parsed message as chat packet:", chatPacket)
 
 			// Ignore messages from "SERVER"
 			if chatPacket.Username == "SERVER" {
@@ -130,6 +127,22 @@ func Initialize(handler *eventhandler.EventHandler) {
 
 			// Send chat message to Discord
 			eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: chatPacket.Username, Message: chatPacket.Message})
+		} else {
+			joinRegexMatches := joinRegex.FindStringSubmatch(packet.Message)
+			disconnectRegexMatches := disconnectRegex.FindStringSubmatch(packet.Message)
+			if len(joinRegexMatches) > 0 {
+				// log.Println("Matched joinRegex:", joinRegexMatches)
+				joinPacket := JoinPacket{IP: joinRegexMatches[1], Port: joinRegexMatches[2], UserID: joinRegexMatches[3], Username: joinRegexMatches[4], OS: joinRegexMatches[5]}
+				// log.Println("Join packet:", joinPacket)
+				eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: joinPacket.Username, Message: "joined", Type: eventhandler.JoinType})
+			} else if len(disconnectRegexMatches) > 0 {
+				// log.Println("Matched disconnectRegex:", disconnectRegexMatches)
+				disconnectPacket := DisconnectPacket{IP: disconnectRegexMatches[1], Port: disconnectRegexMatches[2], UserID: disconnectRegexMatches[3], Username: disconnectRegexMatches[4]}
+				// log.Println("Disconnect packet:", disconnectPacket)
+				eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: disconnectPacket.Username, Message: "left", Type: eventhandler.DisconnectType})
+			} else {
+				// log.Println("Did not match any regex")
+			}
 		}
 	}
 

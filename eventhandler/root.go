@@ -6,11 +6,24 @@ type EventHandler struct {
 	Listeners map[string][]chan Message
 }
 
+// MessageType represents the type of a message
+type MessageType string
+
+const (
+	// DefaultType is a message type
+	DefaultType MessageType = "Default"
+	// JoinType is a message type
+	JoinType MessageType = "Join"
+	// DisconnectType is a message type
+	DisconnectType MessageType = "Disconnect"
+)
+
 // Message is used for emitting data through the EventHandler
 type Message struct {
 	Event   string
 	User    string
 	Message string
+	Type    MessageType
 }
 
 // AddListener adds an event listener to the EventHandler struct instance

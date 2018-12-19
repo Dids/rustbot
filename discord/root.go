@@ -3,6 +3,7 @@ package discord
 import (
 	"log"
 	"os"
+	"time"
 
 	"github.com/Dids/rustbot/eventhandler"
 	"github.com/bwmarrin/discordgo"
@@ -13,6 +14,7 @@ var Client *discordgo.Session
 
 var eventHandler *eventhandler.EventHandler
 var webrconMessageHandler chan eventhandler.Message
+var hasPresence bool
 
 // Initialize will create and start a new Discord client
 func Initialize(handler *eventhandler.EventHandler) {
@@ -27,6 +29,11 @@ func Initialize(handler *eventhandler.EventHandler) {
 
 	// Setup Discord client event handlers
 	Client.AddHandler(handleIncomingMessage)
+
+	// FIXME: Do we have a "ready handler" that we could use to set the presence?
+
+	// Start updating presence
+	go startUpdatingPresence()
 
 	// Setup our custom event handler
 	webrconMessageHandler = make(chan eventhandler.Message)
@@ -49,6 +56,7 @@ func Initialize(handler *eventhandler.EventHandler) {
 func Close() {
 	log.Println("Shutting down the Discord client..")
 	eventHandler.RemoveListener("receive_webrcon_message", webrconMessageHandler)
+	stopUpdatingPresence()
 	Client.Close()
 	log.Println("Successfully shut down the Discord client!")
 }
@@ -84,7 +92,43 @@ func handleIncomingWebrconMessage(message eventhandler.Message) {
 
 	// Format the message and send it to the specified channel
 	channelMessage := "`" + message.User + ": " + message.Message + "`"
+	if message.Type == eventhandler.JoinType || message.Type == eventhandler.DisconnectType {
+		channelMessage = "`* " + message.User + " " + string(message.Message) + "`"
+	}
 	if _, channelSendMessageErr := Client.ChannelMessageSend(os.Getenv("DISCORD_BOT_CHANNEL_ID"), channelMessage); channelSendMessageErr != nil {
 		log.Println("ERROR: Failed to send message to Discord:", channelSendMessageErr)
 	}
+}
+
+func startUpdatingPresence() {
+	for {
+		// Sleep for a bit before updating the presence
+		if hasPresence {
+			time.Sleep(5 * time.Minute)
+		} else {
+			time.Sleep(15 * time.Second)
+		}
+
+		// Update presence
+		updatePresence(os.Getenv("WEBRCON_HOST") + ":" + "28015")
+	}
+}
+
+func updatePresence(presence string) error {
+	// Set the presence
+	if Client != nil && Client.DataReady && presence != "" {
+		if statusErr := Client.UpdateStatus(0, presence); statusErr != nil {
+			log.Println("NOTICE: Failed to update presence:", statusErr)
+			hasPresence = false
+			return statusErr
+		} else {
+			hasPresence = true
+		}
+	}
+	return nil
+}
+
+func stopUpdatingPresence() {
+	// Stop the timer
+	// updatePresenceTimer.Stop()
 }
