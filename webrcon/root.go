@@ -196,7 +196,7 @@ func handleIncomingDiscordMessage(message eventhandler.Message) {
 	log.Println("handleIncomingDiscordMessage:", message)
 
 	// Convert the message to a packet
-	packet := Packet{Message: "say | " + message.User + ": " + message.Message, Identifier: 0, Type: "", Stacktrace: ""}
+	packet := Packet{Message: "say [DISCORD] | " + message.User + ": " + message.Message, Identifier: 0, Type: "", Stacktrace: ""}
 
 	// Convert the packet to a JSON string
 	if jsonBytes, marshalErr := json.Marshal(packet); marshalErr != nil {
