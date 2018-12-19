@@ -10,7 +10,7 @@ import (
 	"github.com/Dids/rustbot/discord"
 	"github.com/Dids/rustbot/eventhandler"
 	"github.com/Dids/rustbot/webrcon"
-	"github.com/joho/godotenv"
+	_ "github.com/joho/godotenv/autoload"
 )
 
 var eventHandler eventhandler.EventHandler
@@ -21,12 +21,6 @@ func main() {
 	fmt.Println("---  RustBot  ---")
 	fmt.Println("-----------------")
 	fmt.Println("")
-
-	// Load environment variables
-	godotenvErr := godotenv.Load()
-	if godotenvErr != nil {
-		log.Fatal("Error loading .env file:", godotenvErr)
-	}
 
 	// Initialize our own event handler
 	eventHandler = eventhandler.EventHandler{Name: "rustbot", Listeners: nil}

@@ -64,20 +64,16 @@ func handleIncomingMessage(session *discordgo.Session, message *discordgo.Messag
 	// Find the channel that the message originated from
 	channel, channelErr := session.State.Channel(message.ChannelID)
 	if channelErr != nil {
-		log.Println("NOTICE: Could not find channel with ID", message.ChannelID)
+		log.Println("WARNING: Could not find channel with ID", message.ChannelID)
 		return
 	}
 
 	// TODO: Eventually change this to "#rust" (or ideally expose this via a startup parameter)
 	// Only process messages from specific channels
-	if channel.Name != "botchat" {
-		log.Println("NOTICE: Ignoring message from channel", channel.Name)
+	if channel.ID != os.Getenv("DISCORD_BOT_CHANNEL_ID") {
+		log.Println("NOTICE: Ignoring message from channel:", "#"+channel.Name)
 		return
 	}
-
-	// TODO: This is temporary!
-	// Echo the message back to the channel
-	// session.ChannelMessageSend(message.ChannelID, message.Content)
 
 	// Relay the message to our message handler, which will eventually send it to the Webrcon client
 	eventHandler.Emit(eventhandler.Message{Event: "receive_discord_message", User: message.Author.Username, Message: message.Content})
@@ -86,7 +82,9 @@ func handleIncomingMessage(session *discordgo.Session, message *discordgo.Messag
 func handleIncomingWebrconMessage(message eventhandler.Message) {
 	log.Println("handleIncomingWebrconMessage:", message)
 
-	// TODO: Somehow find the session/channel to send the message to
-
-	// TODO: Relay message to Discord
+	// Format the message and send it to the specified channel
+	channelMessage := "`" + message.User + ": " + message.Message + "`"
+	if _, channelSendMessageErr := Client.ChannelMessageSend(os.Getenv("DISCORD_BOT_CHANNEL_ID"), channelMessage); channelSendMessageErr != nil {
+		log.Println("ERROR: Failed to send message to Discord:", channelSendMessageErr)
+	}
 }
