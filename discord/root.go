@@ -140,7 +140,7 @@ func handleIncomingWebrconMessage(message eventhandler.Message) {
 	// Format the message and send it to the specified channel
 	channelMessage := "" + message.User + ": " + message.Message + ""
 	if message.Type == eventhandler.JoinType || message.Type == eventhandler.DisconnectType {
-		channelMessage = "_* " + message.User + " " + string(message.Message) + "_"
+		channelMessage = "_" + message.User + " " + string(message.Message) + "_"
 	}
 	if _, channelSendMessageErr := Client.ChannelMessageSend(os.Getenv("DISCORD_BOT_CHANNEL_ID"), channelMessage); channelSendMessageErr != nil {
 		log.Println("ERROR: Failed to send message to Discord:", message, channelSendMessageErr)
