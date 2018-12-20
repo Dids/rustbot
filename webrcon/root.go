@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strconv"
 
 	"github.com/Dids/rustbot/eventhandler"
 	"github.com/sacOO7/gowebsocket"
@@ -14,9 +15,9 @@ var eventHandler *eventhandler.EventHandler
 var discordMessageHandler chan eventhandler.Message
 var websocketClient gowebsocket.Socket
 
-var chatRegex, _ = regexp.Compile(`\[CHAT\] (.+?)\[[0-9]+\/([0-9]+)\] : (.*)`)
-var joinRegex, _ = regexp.Compile(`(.*):([0-9]+)+\/([0-9]+)+\/(.+?) joined \[(.*)\/([0-9]+)]`)
-var disconnectRegex, _ = regexp.Compile(`(.*):([0-9]+)+\/([0-9]+)+\/(.+?) disconnecting: (.*)`)
+var chatRegex = regexp.MustCompile(`\[CHAT\] (.+?)\[[0-9]+\/([0-9]+)\] : (.*)`)
+var joinRegex = regexp.MustCompile(`(.*):([0-9]+)+\/([0-9]+)+\/(.+?) joined \[(.*)\/([0-9]+)]`)
+var disconnectRegex = regexp.MustCompile(`(.*):([0-9]+)+\/([0-9]+)+\/(.+?) disconnecting: (.*)`)
 
 // PacketType represents the type of a webrcon packet
 type PacketType string
@@ -53,7 +54,7 @@ type Packet struct {
 // ChatPacket represents a single webrcon chat packet
 type ChatPacket struct {
 	Message  string `json:"Message"`
-	UserID   string `json:"UserId"`
+	UserID   uint64 `json:"UserId"`
 	Username string `json:"Username"`
 	Color    string `json:"Color"`
 	Time     uint64 `json:"Time"`
@@ -63,7 +64,7 @@ type ChatPacket struct {
 type JoinPacket struct {
 	IP       string `json:"IP"`
 	Port     string `json:"Port"`
-	UserID   string `json:"UserId"`
+	UserID   uint64 `json:"UserId"`
 	Username string `json:"Username"`
 	OS       string `json:"OS"`
 }
@@ -72,7 +73,7 @@ type JoinPacket struct {
 type DisconnectPacket struct {
 	IP       string `json:"IP"`
 	Port     string `json:"Port"`
-	UserID   string `json:"UserId"`
+	UserID   uint64 `json:"UserId"`
 	Username string `json:"Username"`
 }
 
@@ -115,13 +116,13 @@ func Initialize(handler *eventhandler.EventHandler) {
 		if packet.Identifier == ChatIdentifier && packet.Type == ChatType {
 			chatPacket := ChatPacket{}
 			if parseErr := json.Unmarshal([]byte(packet.Message), &chatPacket); parseErr != nil {
-				log.Println("ERROR: Failed to parse as chat message:", parseErr)
+				log.Println("ERROR: Failed to parse as chat message:", message, parseErr)
 			}
 			// log.Println("Parsed message as chat packet:", chatPacket)
 
 			// Ignore messages from "SERVER"
 			if chatPacket.Username == "SERVER" {
-				log.Println("NOTICE: Ignoring message from SERVER")
+				// log.Println("NOTICE: Ignoring message from SERVER")
 				return
 			}
 
@@ -130,14 +131,16 @@ func Initialize(handler *eventhandler.EventHandler) {
 		} else {
 			joinRegexMatches := joinRegex.FindStringSubmatch(packet.Message)
 			disconnectRegexMatches := disconnectRegex.FindStringSubmatch(packet.Message)
-			if len(joinRegexMatches) > 0 {
+			if len(joinRegexMatches) > 1 {
 				// log.Println("Matched joinRegex:", joinRegexMatches)
-				joinPacket := JoinPacket{IP: joinRegexMatches[1], Port: joinRegexMatches[2], UserID: joinRegexMatches[3], Username: joinRegexMatches[4], OS: joinRegexMatches[5]}
+				userID, _ := strconv.ParseUint(joinRegexMatches[3], 10, 64)
+				joinPacket := JoinPacket{IP: joinRegexMatches[1], Port: joinRegexMatches[2], UserID: userID, Username: joinRegexMatches[4], OS: joinRegexMatches[5]}
 				// log.Println("Join packet:", joinPacket)
 				eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: joinPacket.Username, Message: "joined", Type: eventhandler.JoinType})
-			} else if len(disconnectRegexMatches) > 0 {
+			} else if len(disconnectRegexMatches) > 1 {
 				// log.Println("Matched disconnectRegex:", disconnectRegexMatches)
-				disconnectPacket := DisconnectPacket{IP: disconnectRegexMatches[1], Port: disconnectRegexMatches[2], UserID: disconnectRegexMatches[3], Username: disconnectRegexMatches[4]}
+				userID, _ := strconv.ParseUint(disconnectRegexMatches[3], 10, 64)
+				disconnectPacket := DisconnectPacket{IP: disconnectRegexMatches[1], Port: disconnectRegexMatches[2], UserID: userID, Username: disconnectRegexMatches[4]}
 				// log.Println("Disconnect packet:", disconnectPacket)
 				eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: disconnectPacket.Username, Message: "left", Type: eventhandler.DisconnectType})
 			} else {
@@ -196,13 +199,14 @@ func handleIncomingDiscordMessage(message eventhandler.Message) {
 	log.Println("handleIncomingDiscordMessage:", message)
 
 	// Convert the message to a packet
-	packet := Packet{Message: "say [DISCORD] | " + message.User + ": " + message.Message, Identifier: 0, Type: "", Stacktrace: ""}
+	packet := Packet{Message: "say [DISCORD] " + message.User + ": " + message.Message, Identifier: 0, Type: "", Stacktrace: ""}
 
 	// Convert the packet to a JSON string
 	if jsonBytes, marshalErr := json.Marshal(packet); marshalErr != nil {
 		log.Println("ERROR: Failed to marshal packet:", marshalErr)
 	} else {
 		// Relay message to Webrcon
+		// log.Println("!!! SENDING DATA TO WEBRCON SERVER !!!", string(jsonBytes))
 		websocketClient.SendText(string(jsonBytes))
 	}
 }

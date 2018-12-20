@@ -3,6 +3,8 @@ package discord
 import (
 	"log"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/Dids/rustbot/eventhandler"
@@ -15,6 +17,10 @@ var Client *discordgo.Session
 var eventHandler *eventhandler.EventHandler
 var webrconMessageHandler chan eventhandler.Message
 var hasPresence bool
+
+var mentionRegex = regexp.MustCompile(`(?:@)(\w+)`)
+var unescapeBackslashRegex = regexp.MustCompile(`\\(\*|_|` + "`" + `|~|\\)`)
+var escapeMarkdownRegex = regexp.MustCompile(`(\*|_|` + "`" + `|~|\\)`)
 
 // Initialize will create and start a new Discord client
 func Initialize(handler *eventhandler.EventHandler) {
@@ -30,7 +36,7 @@ func Initialize(handler *eventhandler.EventHandler) {
 	// Setup Discord client event handlers
 	Client.AddHandler(handleIncomingMessage)
 
-	// FIXME: Do we have a "ready handler" that we could use to set the presence?
+	// FIXME: Do we have a "ready handler" that we could use to set the presence just once, instead of running it on a loop?
 
 	// Start updating presence
 	go startUpdatingPresence()
@@ -90,13 +96,54 @@ func handleIncomingMessage(session *discordgo.Session, message *discordgo.Messag
 func handleIncomingWebrconMessage(message eventhandler.Message) {
 	log.Println("handleIncomingWebrconMessage:", message)
 
+	// Format any potential mentions
+	mentionRegexMatches := mentionRegex.FindAllStringSubmatch(message.Message, -1)
+	if len(mentionRegexMatches) > 0 {
+		// Get the bot channel
+		if botChannel, botChannelErr := Client.Channel(os.Getenv("DISCORD_BOT_CHANNEL_ID")); botChannelErr != nil {
+			log.Println("NOTICE: Failed to find bot channel:", botChannelErr)
+		} else {
+			// Get the bot guild from the channel
+			if botGuild, botGuildErr := Client.Guild(botChannel.GuildID); botGuildErr != nil {
+				log.Println("NOTICE: Failed to find bot guild:", botGuildErr)
+			} else {
+				for _, match := range mentionRegexMatches {
+
+					mentionUsername := strings.ToUpper(match[1])
+
+					// Loop through each user in the guild
+					for _, member := range botGuild.Members {
+						username := strings.ToUpper(member.Nick)
+						if username == "" {
+							username = strings.ToUpper(member.User.Username)
+						}
+
+						if username == mentionUsername {
+							replacer := newCaseInsensitiveReplacer(`@`+username, `<@!`+member.User.ID+`>`)
+							formattedMentionMessage := replacer.Replace(message.Message)
+							// log.Println("Formatted mention message:", formattedMentionMessage)
+							message.Message = formattedMentionMessage
+
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Escape both "message.User" and "message.Message" to combat potential Markdown abuse
+	//log.Println("Escaping message:", message)
+	message = escapeMessage(message)
+	//log.Println("Escaped message:", message)
+
 	// Format the message and send it to the specified channel
-	channelMessage := "`" + message.User + ": " + message.Message + "`"
+	channelMessage := "" + message.User + ": " + message.Message + ""
 	if message.Type == eventhandler.JoinType || message.Type == eventhandler.DisconnectType {
-		channelMessage = "`* " + message.User + " " + string(message.Message) + "`"
+		channelMessage = "_* " + message.User + " " + string(message.Message) + "_"
 	}
 	if _, channelSendMessageErr := Client.ChannelMessageSend(os.Getenv("DISCORD_BOT_CHANNEL_ID"), channelMessage); channelSendMessageErr != nil {
-		log.Println("ERROR: Failed to send message to Discord:", channelSendMessageErr)
+		log.Println("ERROR: Failed to send message to Discord:", message, channelSendMessageErr)
 	}
 }
 
@@ -121,9 +168,8 @@ func updatePresence(presence string) error {
 			log.Println("NOTICE: Failed to update presence:", statusErr)
 			hasPresence = false
 			return statusErr
-		} else {
-			hasPresence = true
 		}
+		hasPresence = true
 	}
 	return nil
 }
@@ -131,4 +177,33 @@ func updatePresence(presence string) error {
 func stopUpdatingPresence() {
 	// Stop the timer
 	// updatePresenceTimer.Stop()
+}
+
+// TODO: Refactor/move these to EventHandler, and if possible escape automatically!
+func escapeMessage(message eventhandler.Message) eventhandler.Message {
+	message.User = escapeMarkdown(message.User)
+	message.Message = escapeMarkdown(message.Message)
+	return message
+}
+
+func escapeMarkdown(markdown string) string {
+	unescaped := unescapeBackslashRegex.ReplaceAllString(markdown, `$1`) // unescape any "backslashed" character
+	escaped := escapeMarkdownRegex.ReplaceAllString(unescaped, `\$1`)
+	return escaped
+}
+
+type caseInsensitiveReplacer struct {
+	toReplace   *regexp.Regexp
+	replaceWith string
+}
+
+func newCaseInsensitiveReplacer(toReplace, replaceWith string) *caseInsensitiveReplacer {
+	return &caseInsensitiveReplacer{
+		toReplace:   regexp.MustCompile("(?i)" + toReplace),
+		replaceWith: replaceWith,
+	}
+}
+
+func (cir *caseInsensitiveReplacer) Replace(str string) string {
+	return cir.toReplace.ReplaceAllString(str, cir.replaceWith)
 }
