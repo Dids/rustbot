@@ -28,8 +28,12 @@ coverage.txt
 
 # Environment variables
 .env
+.env.*
 .env-*
 .env/
+
+# Docker
+.docker/
 
 # Test binary, build with `go test -c`
 *.test

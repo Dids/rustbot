@@ -5,7 +5,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/Dids/rustbot/eventhandler"
 	"github.com/bwmarrin/discordgo"
@@ -39,7 +38,7 @@ func Initialize(handler *eventhandler.EventHandler) {
 	// FIXME: Do we have a "ready handler" that we could use to set the presence just once, instead of running it on a loop?
 
 	// Start updating presence
-	go startUpdatingPresence()
+	// go startUpdatingPresence()
 
 	// Setup our custom event handler
 	webrconMessageHandler = make(chan eventhandler.Message)
@@ -94,7 +93,7 @@ func handleIncomingMessage(session *discordgo.Session, message *discordgo.Messag
 }
 
 func handleIncomingWebrconMessage(message eventhandler.Message) {
-	log.Println("handleIncomingWebrconMessage:", message)
+	// log.Println("handleIncomingWebrconMessage:", message)
 
 	// Format any potential mentions
 	mentionRegexMatches := mentionRegex.FindAllStringSubmatch(message.Message, -1)
@@ -137,6 +136,14 @@ func handleIncomingWebrconMessage(message eventhandler.Message) {
 	message = escapeMessage(message)
 	//log.Println("Escaped message:", message)
 
+	// Handle status messages
+	if message.Type == eventhandler.StatusType {
+		// Update presence
+		// log.Println("Received status message, updating presence:", message.Message)
+		updatePresence(message.Message)
+		return
+	}
+
 	// Format the message and send it to the specified channel
 	channelMessage := "" + message.User + ": " + message.Message + ""
 	if message.Type == eventhandler.JoinType || message.Type == eventhandler.DisconnectType {
@@ -147,7 +154,8 @@ func handleIncomingWebrconMessage(message eventhandler.Message) {
 	}
 }
 
-func startUpdatingPresence() {
+// NOTE: This has been replaced by the webrcon "status" message
+/*func startUpdatingPresence() {
 	for {
 		// Sleep for a bit before updating the presence
 		if hasPresence {
@@ -159,7 +167,7 @@ func startUpdatingPresence() {
 		// Update presence
 		updatePresence(os.Getenv("WEBRCON_HOST") + ":" + "28015")
 	}
-}
+}*/
 
 func updatePresence(presence string) error {
 	// Set the presence

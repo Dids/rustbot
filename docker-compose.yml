@@ -1,0 +1,24 @@
+version: "3.1"
+services:
+  bot:
+    build: .
+    links:
+      - rust
+    env_file:
+      - .env.local
+    restart: always
+    #deploy:
+    #  restart_policy:
+    #    condition: any
+    #    delay: 5s
+  rust:
+    image: didstopia/rust-server
+    environment:
+      RUST_SERVER_STARTUP_ARGUMENTS: "-batchmode -load +server.secure 1 +nav_disable true"
+      RUST_SERVER_WORLDSIZE: "1000"
+    volumes:
+      - ./.docker/rust:/steamcmd/rust
+    ports:
+      - 8080:8080
+      - 28015:28015
+      - 28016:28016
