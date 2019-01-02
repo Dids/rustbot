@@ -26,7 +26,13 @@ func main() {
 	eventHandler = eventhandler.EventHandler{Name: "rustbot", Listeners: nil}
 
 	// Initialize the Discord client
-	discord.Initialize(&eventHandler)
+	discord, err := discord.NewDiscord(&eventHandler)
+	if err != nil {
+		log.Panic(err)
+	}
+	if err = discord.Open(); err != nil {
+		log.Panic(err)
+	}
 
 	// Initialize the Webrcon Client
 	webrcon.Initialize(&eventHandler)
@@ -42,5 +48,7 @@ func main() {
 
 	// Properly dispose of the clients when exiting
 	webrcon.Close()
-	discord.Close()
+	if err := discord.Close(); err != nil {
+		log.Panic(err)
+	}
 }

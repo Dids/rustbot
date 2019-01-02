@@ -285,13 +285,16 @@ func handleIncomingDiscordMessage(message eventhandler.Message) {
 	}
 }
 
+// TODO: Rewrite this at some point so we can stop it if we want to,
+//       for example if we start updating after the "ready" websocket
+//       event, as that's where it would make the most sense, right?
 func startUpdatingStatus() {
 	for {
-		// Sleep for a bit before requesting the status (Discord API only allows the presence to be updated every 15 seconds)
-		time.Sleep(15 * time.Second)
-
 		// Send "status" command
 		// log.Println("Requesting status..")
 		websocketClient.SendText(`{ "Message": "status", "Identifier": 0, "Type": "Generic" }`)
+
+		// Sleep for a bit before requesting the status (Discord API only allows the presence to be updated every 15 seconds)
+		time.Sleep(15 * time.Second)
 	}
 }
