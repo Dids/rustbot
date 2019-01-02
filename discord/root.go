@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"errors"
 	"log"
 	"os"
 	"regexp"
@@ -10,65 +11,81 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// Client is the Discord client
-var Client *discordgo.Session
-
-var eventHandler *eventhandler.EventHandler
-var webrconMessageHandler chan eventhandler.Message
-var hasPresence bool
-
+// Various precompiled regexes for Discord/Markdown
 var mentionRegex = regexp.MustCompile(`(?:@)(\w+)`)
 var unescapeBackslashRegex = regexp.MustCompile(`\\(\*|_|` + "`" + `|~|\\)`)
 var escapeMarkdownRegex = regexp.MustCompile(`(\*|_|` + "`" + `|~|\\)`)
 
-// Initialize will create and start a new Discord client
-func Initialize(handler *eventhandler.EventHandler) {
+// Discord is an abstraction around the Discord client
+type Discord struct {
+	Client                *discordgo.Session
+	EventHandler          *eventhandler.EventHandler
+	WebrconMessageHandler chan eventhandler.Message
+	HasPresence           bool
+	IsReady               bool
+}
+
+// NewDiscord creates and returns a new instance of Discord
+func NewDiscord(handler *eventhandler.EventHandler) (*Discord, error) {
+	discord := &Discord{}
+
 	// Initialize the Discord client
-	log.Println("Initializing the Discord client..")
 	if discordClient, discordClientErr := discordgo.New("Bot " + os.Getenv("DISCORD_BOT_TOKEN")); discordClientErr == nil {
-		Client = discordClient
+		discord.Client = discordClient
 	} else {
-		log.Fatal("Error creating Discord client:", discordClientErr)
+		return nil, discordClientErr
 	}
-	log.Println("Successfully created the Discord client")
 
 	// Setup Discord client event handlers
-	Client.AddHandler(handleIncomingMessage)
-
-	// FIXME: Do we have a "ready handler" that we could use to set the presence just once, instead of running it on a loop?
-
-	// Start updating presence
-	// go startUpdatingPresence()
+	discord.Client.AddHandler(discord.handleConnect)
+	discord.Client.AddHandler(discord.handleDisconnect)
+	discord.Client.AddHandler(discord.handleRateLimit)
+	discord.Client.AddHandler(discord.handleReady)
+	discord.Client.AddHandler(discord.handleMessageCreate)
 
 	// Setup our custom event handler
-	webrconMessageHandler = make(chan eventhandler.Message)
-	eventHandler = handler
-	eventHandler.AddListener("receive_webrcon_message", webrconMessageHandler)
+	discord.WebrconMessageHandler = make(chan eventhandler.Message)
+	discord.EventHandler = handler
+	discord.EventHandler.AddListener("receive_webrcon_message", discord.WebrconMessageHandler)
 	go func() {
 		for {
-			handleIncomingWebrconMessage(<-webrconMessageHandler)
+			discord.handleIncomingWebrconMessage(<-discord.WebrconMessageHandler)
 		}
 	}()
 
-	// Open a websocket connection to Discord and begin listening.
-	discordClientOpenErr := Client.Open()
-	if discordClientOpenErr != nil {
-		log.Fatal("Error opening Discord client connection:", discordClientOpenErr)
-	}
+	return discord, nil
+}
+
+// Open will start the Discord client and connect to the API
+func (discord *Discord) Open() error {
+	return discord.Client.Open()
 }
 
 // Close will gracefully shutdown and cleanup the Discord client
-func Close() {
-	log.Println("Shutting down the Discord client..")
-	eventHandler.RemoveListener("receive_webrcon_message", webrconMessageHandler)
-	stopUpdatingPresence()
-	Client.Close()
-	log.Println("Successfully shut down the Discord client!")
+func (discord *Discord) Close() error {
+	discord.EventHandler.RemoveListener("receive_webrcon_message", discord.WebrconMessageHandler)
+	return discord.Client.Close()
 }
 
-// This function will be called (due to AddHandler above) every time a new
-// message is created on any channel that the autenticated bot has access to.
-func handleIncomingMessage(session *discordgo.Session, message *discordgo.MessageCreate) {
+func (discord *Discord) handleConnect(session *discordgo.Session, event *discordgo.Connect) {
+	log.Println("NOTICE: Discord event: connect")
+}
+
+func (discord *Discord) handleDisconnect(session *discordgo.Session, event *discordgo.Disconnect) {
+	log.Println("NOTICE: Discord event: disconnect")
+	discord.IsReady = false
+}
+
+func (discord *Discord) handleRateLimit(session *discordgo.Session, event *discordgo.RateLimit) {
+	log.Println("NOTICE: Discord event: ratelimit")
+}
+
+func (discord *Discord) handleReady(session *discordgo.Session, event *discordgo.Ready) {
+	log.Println("NOTICE: Discord event: ready")
+	discord.IsReady = true
+}
+
+func (discord *Discord) handleMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
 	// Ignore all messages created by the bot itself
 	if message.Author.ID == session.State.User.ID {
 		return
@@ -81,7 +98,6 @@ func handleIncomingMessage(session *discordgo.Session, message *discordgo.Messag
 		return
 	}
 
-	// TODO: Eventually change this to "#rust" (or ideally expose this via a startup parameter)
 	// Only process messages from specific channels
 	if channel.ID != os.Getenv("DISCORD_BOT_CHANNEL_ID") {
 		log.Println("NOTICE: Ignoring message from channel:", "#"+channel.Name)
@@ -89,21 +105,21 @@ func handleIncomingMessage(session *discordgo.Session, message *discordgo.Messag
 	}
 
 	// Relay the message to our message handler, which will eventually send it to the Webrcon client
-	eventHandler.Emit(eventhandler.Message{Event: "receive_discord_message", User: message.Author.Username, Message: message.Content})
+	discord.EventHandler.Emit(eventhandler.Message{Event: "receive_discord_message", User: message.Author.Username, Message: message.Content})
 }
 
-func handleIncomingWebrconMessage(message eventhandler.Message) {
+func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Message) {
 	// log.Println("handleIncomingWebrconMessage:", message)
 
 	// Format any potential mentions
 	mentionRegexMatches := mentionRegex.FindAllStringSubmatch(message.Message, -1)
 	if len(mentionRegexMatches) > 0 {
 		// Get the bot channel
-		if botChannel, botChannelErr := Client.Channel(os.Getenv("DISCORD_BOT_CHANNEL_ID")); botChannelErr != nil {
+		if botChannel, botChannelErr := discord.Client.Channel(os.Getenv("DISCORD_BOT_CHANNEL_ID")); botChannelErr != nil {
 			log.Println("NOTICE: Failed to find bot channel:", botChannelErr)
 		} else {
 			// Get the bot guild from the channel
-			if botGuild, botGuildErr := Client.Guild(botChannel.GuildID); botGuildErr != nil {
+			if botGuild, botGuildErr := discord.Client.Guild(botChannel.GuildID); botGuildErr != nil {
 				log.Println("NOTICE: Failed to find bot guild:", botGuildErr)
 			} else {
 				for _, match := range mentionRegexMatches {
@@ -140,7 +156,9 @@ func handleIncomingWebrconMessage(message eventhandler.Message) {
 	if message.Type == eventhandler.StatusType {
 		// Update presence
 		// log.Println("Received status message, updating presence:", message.Message)
-		updatePresence(message.Message)
+		if err := discord.updatePresence(message.Message); err != nil {
+			log.Println("NOTICE:", err)
+		}
 		return
 	}
 
@@ -149,42 +167,27 @@ func handleIncomingWebrconMessage(message eventhandler.Message) {
 	if message.Type == eventhandler.JoinType || message.Type == eventhandler.DisconnectType {
 		channelMessage = "_" + message.User + " " + string(message.Message) + "_"
 	}
-	if _, channelSendMessageErr := Client.ChannelMessageSend(os.Getenv("DISCORD_BOT_CHANNEL_ID"), channelMessage); channelSendMessageErr != nil {
+	if _, channelSendMessageErr := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_BOT_CHANNEL_ID"), channelMessage); channelSendMessageErr != nil {
 		log.Println("ERROR: Failed to send message to Discord:", message, channelSendMessageErr)
 	}
 }
 
-// NOTE: This has been replaced by the webrcon "status" message
-/*func startUpdatingPresence() {
-	for {
-		// Sleep for a bit before updating the presence
-		if hasPresence {
-			time.Sleep(5 * time.Minute)
-		} else {
-			time.Sleep(15 * time.Second)
-		}
-
-		// Update presence
-		updatePresence(os.Getenv("WEBRCON_HOST") + ":" + "28015")
+func (discord *Discord) updatePresence(presence string) error {
+	if !discord.IsReady {
+		return errors.New("Can't update presence, Discord not ready")
 	}
-}*/
 
-func updatePresence(presence string) error {
 	// Set the presence
-	if Client != nil && Client.DataReady && presence != "" {
-		if statusErr := Client.UpdateStatus(0, presence); statusErr != nil {
-			log.Println("NOTICE: Failed to update presence:", statusErr)
-			hasPresence = false
+	if discord.Client != nil && discord.Client.DataReady && presence != "" {
+		if statusErr := discord.Client.UpdateStatus(0, presence); statusErr != nil {
+			discord.HasPresence = false
 			return statusErr
 		}
-		hasPresence = true
+		discord.HasPresence = true
+	} else {
+		return errors.New("Can't update presence, Discord client is nil or not ready")
 	}
 	return nil
-}
-
-func stopUpdatingPresence() {
-	// Stop the timer
-	// updatePresenceTimer.Stop()
 }
 
 // TODO: Refactor/move these to EventHandler, and if possible escape automatically!
