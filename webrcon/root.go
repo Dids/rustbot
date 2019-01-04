@@ -137,9 +137,10 @@ func Initialize(handler *eventhandler.EventHandler) {
 		// FIXME: Remove these when done
 		// message = `{ "Message": "109.240.100.173:18521/76561198806240991/Veru joined [windows/76561198806240991]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 		// message = `{ "Message": "109.240.100.173:18521/76561198806240991/Veru disconnecting: disconnect", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
-		//message = `{ "Message": "MurmeliOP[263066/76561198113377601] was killed by Vildemare[937684/76561198012399365]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
-		//message = `{ "Message": "๖ۣۜZeUz[902806/76561197985407799] was killed by Hunger", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
-		//message = `{ "Message": "Tepachu[527565/76561198079774759] died (Fall)", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		// message = `{ "Message": "MurmeliOP[263066/76561198113377601] was killed by Vildemare[937684/76561198012399365]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		message = `{ "Message": "Sarttuu[731399/76561198089400492] was killed by 7645878[29630/7645878]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		// message = `{ "Message": "๖ۣۜZeUz[902806/76561197985407799] was killed by Hunger", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		// message = `{ "Message": "Tepachu[527565/76561198079774759] died (Fall)", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 
 		// Parse the incoming message as a webrcon packet
 		packet := Packet{}
@@ -252,10 +253,10 @@ func Initialize(handler *eventhandler.EventHandler) {
 
 				// Store individual entries in local variables
 				victim := result["victim"]
-				//victimID := result["victimid"]
+				victimID := result["victimid"]
 				how := result["how"]
 				killer := result["killer"]
-				//killerID := result["killerid"]
+				killerID := result["killerid"]
 				reason := result["reason"]
 
 				// Remove potentially leaking IDs
@@ -275,6 +276,20 @@ func Initialize(handler *eventhandler.EventHandler) {
 				log.Println("killer:", killer)
 				log.Println("killerID:", killerID)
 				log.Println("reason:", reason)*/
+
+				// TODO: These still needs work, for situations like this:
+				//       6213551 died from generic
+
+				// Skip scientist deaths
+				if len(victim) > 0 && len(victimID) > 0 && victim == victimID {
+					//log.Println("NOTICE: Skippig potential scientist death:", message)
+					return
+				}
+
+				// Rename scientists
+				if len(killer) > 0 && len(killerID) > 0 && killer == killerID {
+					killer = "a scientist"
+				}
 
 				// Construct the death message
 				deathMessage := ""
