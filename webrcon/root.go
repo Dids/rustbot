@@ -23,6 +23,7 @@ var disconnectRegex = regexp.MustCompile(`(.*):([0-9]+)+\/([0-9]+)+\/(.+?) disco
 var killRegex = regexp.MustCompile(`(?P<victim>.+?)(?:\[(?:[0-9]+?)\/(?P<victimid>[0-9]+?)\])(?: (?P<how>was killed by|died) )(?P<killer>(?:(?:[^\/\[\]]+)\[[0-9]+/(?P<killerid>[0-9]+)\]$)|(?P<reason>[^\/]*$))`)
 var statusRegex = regexp.MustCompile(`(?:.*?hostname:\s*(?P<hostname>.*?)\\n)(?:.*?version\s*:\s*(?P<version>\d+) )(?:.*?secure\s*\((?P<secure>.*?)\)\\n)(?:.*?map\s*:\s*(?P<map>.*?)\\n)(?:.*?players\s*:\s*(?P<players_current>\d+) \((?P<players_max>\d+) max\) \((?P<players_queued>\d+) queued\) \((?P<players_joining>\d+) joining\)\\n)`)
 var removeIDsRegex = regexp.MustCompile(`\[.+?\/.+?\]`)
+var removeBracesRegex = regexp.MustCompile(`(?:.+)( \(.+\))`)
 
 // Status represents the current status of the server
 var Status StatusPacket
@@ -109,7 +110,7 @@ func Initialize(handler *eventhandler.EventHandler) {
 		log.Println("Connected to server")
 
 		// Send server connected message to Discord
-		eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "Connected to server!", Type: eventhandler.ServerConnectedType})
+		eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "I'm back, baby!", Type: eventhandler.ServerConnectedType})
 	}
 
 	websocketClient.OnDisconnected = func(err error, socket gowebsocket.Socket) {
@@ -138,9 +139,12 @@ func Initialize(handler *eventhandler.EventHandler) {
 		// message = `{ "Message": "109.240.100.173:18521/76561198806240991/Veru joined [windows/76561198806240991]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 		// message = `{ "Message": "109.240.100.173:18521/76561198806240991/Veru disconnecting: disconnect", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 		// message = `{ "Message": "MurmeliOP[263066/76561198113377601] was killed by Vildemare[937684/76561198012399365]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
-		message = `{ "Message": "Sarttuu[731399/76561198089400492] was killed by 7645878[29630/7645878]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		// message = `{ "Message": "Sarttuu[731399/76561198089400492] was killed by 7645878[29630/7645878]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 		// message = `{ "Message": "๖ۣۜZeUz[902806/76561197985407799] was killed by Hunger", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 		// message = `{ "Message": "Tepachu[527565/76561198079774759] died (Fall)", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		// message = `{ "Message": "swagger[1189342/76561198407394435] was killed by guntrap.deployed (entity)", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		// message = `{ "Message": "swagger[1189342/76561198407394435] was killed by wolf (wolf)", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		// message = `{ "Message": "swagger[1189342/76561198407394435] was killed by (Drowned)", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 
 		// Parse the incoming message as a webrcon packet
 		packet := Packet{}
@@ -263,12 +267,21 @@ func Initialize(handler *eventhandler.EventHandler) {
 				victim = removeIDsRegex.ReplaceAllString(victim, "")
 				killer = removeIDsRegex.ReplaceAllString(killer, "")
 
-				// Reformat the death reason
+				// Remove words in parentheses (eg. "boar (Boar)")
+				if len(killer) > 0 && len(killerID) == 0 && len(reason) > 0 && len(removeBracesRegex.FindStringSubmatch(killer)) > 1 {
+					killer = strings.Replace(killer, removeBracesRegex.ReplaceAllString(killer, "$1"), "", -1)
+				}
+				if len(reason) > 0 && len(removeBracesRegex.FindStringSubmatch(reason)) > 1 {
+					reason = strings.Replace(reason, removeBracesRegex.ReplaceAllString(reason, "$1"), "", -1)
+				}
+
+				// Reformat the death reason (eg. "X died (Bullet)")
 				reason = strings.ToLower(reason)
 				reason = strings.Replace(reason, "(", "", -1)
 				reason = strings.Replace(reason, ")", "", -1)
 
-				/*log.Println("killRegexMatches:", killRegexMatches)
+				/*log.Println("message:", message)
+				log.Println("killRegexMatches:", killRegexMatches)
 				log.Println("result:", result)
 				log.Println("victim:", victim)
 				log.Println("victimID:", victimID)
@@ -277,12 +290,8 @@ func Initialize(handler *eventhandler.EventHandler) {
 				log.Println("killerID:", killerID)
 				log.Println("reason:", reason)*/
 
-				// TODO: These still needs work, for situations like this:
-				//       6213551 died from generic
-
 				// Skip scientist deaths
 				if len(victim) > 0 && len(victimID) > 0 && victim == victimID {
-					//log.Println("NOTICE: Skippig potential scientist death:", message)
 					return
 				}
 
@@ -291,12 +300,18 @@ func Initialize(handler *eventhandler.EventHandler) {
 					killer = "a scientist"
 				}
 
+				// Rename drowning
+				if len(killer) > 0 && len(killerID) == 0 && len(reason) > 0 && strings.Contains(reason, "drowned") {
+					// tuna was killed by drowned
+					reason = "drowning"
+				}
+
 				// Construct the death message
 				deathMessage := ""
-				if len(victim) > 0 && len(how) > 0 && len(killer) > 0 && len(reason) == 0 {
+				if len(victim) > 0 && len(victimID) > 0 && len(how) > 0 && len(killer) > 0 && len(killerID) > 0 && len(reason) == 0 {
 					// "PlayerA was killed by PlayerB"
 					deathMessage = victim + " " + how + " " + killer
-				} else if len(victim) > 0 && len(how) > 0 && len(reason) > 0 {
+				} else if len(victim) > 0 && len(victimID) > 0 && len(how) > 0 && len(reason) > 0 {
 					if len(how) == 4 {
 						// "PlayerA died fall"
 						deathMessage = victim + " " + how + " from " + reason
@@ -364,7 +379,7 @@ func Initialize(handler *eventhandler.EventHandler) {
 // Close will gracefully shutdown and cleanup the Webrcon connection
 func Close() {
 	// Send shutdown message to Discord
-	eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "Going away, see you in a bit!", Type: eventhandler.ServerDisconnectedType})
+	eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "Going away, see you in a bit..", Type: eventhandler.ServerDisconnectedType})
 
 	// Sleep for a bit before shutting down
 	time.Sleep(1 * time.Second)
@@ -403,4 +418,23 @@ func startUpdatingStatus() {
 		// Sleep for a bit before requesting the status (Discord API only allows the presence to be updated every 15 seconds)
 		time.Sleep(15 * time.Second)
 	}
+}
+
+func removeDuplicates(elements []int) []int {
+	// Use map to record duplicates as we find them.
+	encountered := map[int]bool{}
+	result := []int{}
+
+	for v := range elements {
+		if encountered[elements[v]] == true {
+			// Do not add duplicate.
+		} else {
+			// Record this element as an encountered element.
+			encountered[elements[v]] = true
+			// Append to result slice.
+			result = append(result, elements[v])
+		}
+	}
+	// Return the new slice.
+	return result
 }
