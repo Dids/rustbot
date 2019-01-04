@@ -147,6 +147,8 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 		}
 	}
 
+	// TODO: Also replace the word "ylläpitäjä", "admin" and "admini" with "@Dids", so I get pinged? This should be configurable though..
+
 	// Escape both "message.User" and "message.Message" to combat potential Markdown abuse
 	//log.Println("Escaping message:", message)
 	message = escapeMessage(message)
@@ -156,8 +158,22 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 	if message.Type == eventhandler.StatusType {
 		// Update presence
 		// log.Println("Received status message, updating presence:", message.Message)
+		if err := discord.updateNickname(message.User); err != nil {
+			log.Println("NOTICE:", err)
+		}
 		if err := discord.updatePresence(message.Message); err != nil {
 			log.Println("NOTICE:", err)
+		}
+		return
+		// Handle server connect/disconnect messages
+	} else if message.Type == eventhandler.ServerConnectedType || message.Type == eventhandler.ServerDisconnectedType {
+		if _, err := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_BOT_CHANNEL_ID"), "`"+message.Message+"`"); err != nil {
+			log.Println("ERROR: Failed to send message to Discord:", message, err)
+		}
+		return
+	} else if message.Type == eventhandler.KillType {
+		if _, err := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_BOT_CHANNEL_ID"), "_"+message.Message+"_"); err != nil {
+			log.Println("ERROR: Failed to send message to Discord:", message, err)
 		}
 		return
 	}
@@ -170,6 +186,37 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 	if _, channelSendMessageErr := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_BOT_CHANNEL_ID"), channelMessage); channelSendMessageErr != nil {
 		log.Println("ERROR: Failed to send message to Discord:", message, channelSendMessageErr)
 	}
+}
+
+func (discord *Discord) updateNickname(nickname string) error {
+	if !discord.IsReady {
+		return errors.New("Can't update nickname, Discord not ready")
+	}
+
+	// Set the nickname
+	if discord.Client != nil && discord.Client.DataReady && nickname != "" {
+		// Get the bot channel
+		botChannel, botChannelErr := discord.Client.Channel(os.Getenv("DISCORD_BOT_CHANNEL_ID"))
+		if botChannelErr != nil {
+			return botChannelErr
+		}
+
+		// Construct the nickname payload
+		data := struct {
+			Nick string `json:"nick"`
+		}{nickname}
+
+		// Attempt to change the nickname using the Discord API
+		_, updateNicknameErr := discord.Client.RequestWithBucketID("PATCH", discordgo.EndpointGuildMember(botChannel.GuildID, "@me")+"/nick", data, discordgo.EndpointGuildMember(botChannel.GuildID, ""))
+		if updateNicknameErr != nil {
+			return updateNicknameErr
+		}
+		// log.Println("Successfully updated the nickname:", string(updateNicknameResponse))
+	} else {
+		return errors.New("Can't update presence, Discord client is nil or not ready")
+	}
+
+	return nil
 }
 
 func (discord *Discord) updatePresence(presence string) error {
@@ -187,6 +234,7 @@ func (discord *Discord) updatePresence(presence string) error {
 	} else {
 		return errors.New("Can't update presence, Discord client is nil or not ready")
 	}
+
 	return nil
 }
 

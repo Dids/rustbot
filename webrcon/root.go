@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Dids/rustbot/eventhandler"
@@ -19,7 +20,9 @@ var websocketClient gowebsocket.Socket
 var chatRegex = regexp.MustCompile(`\[CHAT\] (.+?)\[[0-9]+\/([0-9]+)\] : (.*)`)
 var joinRegex = regexp.MustCompile(`(.*):([0-9]+)+\/([0-9]+)+\/(.+?) joined \[(.*)\/([0-9]+)]`)
 var disconnectRegex = regexp.MustCompile(`(.*):([0-9]+)+\/([0-9]+)+\/(.+?) disconnecting: (.*)`)
+var killRegex = regexp.MustCompile(`(?P<victim>.+?)(?:\[(?:[0-9]+?)\/(?P<victimid>[0-9]+?)\])(?: (?P<how>was killed by|died) )(?P<killer>(?:(?:[^\/\[\]]+)\[[0-9]+/(?P<killerid>[0-9]+)\]$)|(?P<reason>[^\/]*$))`)
 var statusRegex = regexp.MustCompile(`(?:.*?hostname:\s*(?P<hostname>.*?)\\n)(?:.*?version\s*:\s*(?P<version>\d+) )(?:.*?secure\s*\((?P<secure>.*?)\)\\n)(?:.*?map\s*:\s*(?P<map>.*?)\\n)(?:.*?players\s*:\s*(?P<players_current>\d+) \((?P<players_max>\d+) max\) \((?P<players_queued>\d+) queued\) \((?P<players_joining>\d+) joining\)\\n)`)
+var removeIDsRegex = regexp.MustCompile(`\[.+?\/.+?\]`)
 
 // Status represents the current status of the server
 var Status StatusPacket
@@ -104,10 +107,23 @@ func Initialize(handler *eventhandler.EventHandler) {
 	// Setup websocket event handlers
 	websocketClient.OnConnected = func(socket gowebsocket.Socket) {
 		log.Println("Connected to server")
+
+		// Send server connected message to Discord
+		eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "Connected to server!", Type: eventhandler.ServerConnectedType})
+	}
+
+	websocketClient.OnDisconnected = func(err error, socket gowebsocket.Socket) {
+		log.Println("Disconnected from server:", err)
+
+		// Send server disconnected message to Discord
+		eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "Disconnected from server!", Type: eventhandler.ServerDisconnectedType})
 	}
 
 	websocketClient.OnConnectError = func(err error, socket gowebsocket.Socket) {
 		log.Println("Received connect error ", err)
+
+		// Send server disconnected message to Discord
+		eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "Cannot connect to server!", Type: eventhandler.ServerDisconnectedType})
 
 		// Notify the primary process to shut down
 		process, _ := os.FindProcess(os.Getpid())
@@ -116,28 +132,32 @@ func Initialize(handler *eventhandler.EventHandler) {
 	}
 
 	websocketClient.OnTextMessage = func(message string, socket gowebsocket.Socket) {
-		// log.Println("Received message " + message)
+		//log.Println("Received message " + message)
 
 		// FIXME: Remove these when done
 		// message = `{ "Message": "109.240.100.173:18521/76561198806240991/Veru joined [windows/76561198806240991]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 		// message = `{ "Message": "109.240.100.173:18521/76561198806240991/Veru disconnecting: disconnect", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		//message = `{ "Message": "MurmeliOP[263066/76561198113377601] was killed by Vildemare[937684/76561198012399365]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		//message = `{ "Message": "๖ۣۜZeUz[902806/76561197985407799] was killed by Hunger", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		//message = `{ "Message": "Tepachu[527565/76561198079774759] died (Fall)", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 
 		// Parse the incoming message as a webrcon packet
 		packet := Packet{}
 		if parseErr := json.Unmarshal([]byte(message), &packet); parseErr != nil {
 			log.Println("ERROR: Failed to parse as generic message:", message, parseErr)
 		}
-		// log.Println("Parsed message as packet:", packet)
+		//log.Println("Parsed message as packet:", packet)
 
-		// TODO: Handle "status" messages
-		/*
-			{
-				"Message": "hostname: [FIN] Suomileijona\nversion : 2138 secure (secure mode enabled, connected to Steam3)\nmap     : Procedural Map\nplayers : 6 (32 max) (0 queued) (0 joining)\n\nid                name             ping connected addr                 owner violation kicks \n76561198435559785 \"Heiri83\"        23   13776.25s 91.159.198.129:61954       0.0       0     \n76561198097494388 \"DarkThunder567\" 82   4438.559s 82.246.51.200:64622        0.0       0     \n76561198072578755 \"V3nu\"           2    2706.112s 87.92.24.97:58463          0.0       0     \n76561198054287977 \"Kirsutan\"       28  1414.394s 84.253.217.171:63920       0.0       0     \n76561198000908636 \"SIPULI\"         24   928.6487s 85.76.35.14:31491          0.0       0     \n76561198259374466 \"SMo0th\"         12   1091.523s 88.113.101.29:52900        0.0       0     \n",
-				"Identifier": 0,
-				"Type": "Generic",
-				"Stacktrace": ""
-			}
-		*/
+		// TODO: These should be enabled/disabled through config/env vars
+		// TODO: Handle events?
+		//       {[event] assets/prefabs/npc/cargo plane/cargo_plane.prefab 0 Generic }
+
+		// TODO: These should be enabled/disabled through config/env vars
+		// TODO: Handle kill messages/packets:
+		//       {MurmeliOP[263066/76561198113377601] was killed by Vildemare[937684/76561198012399365] 0 Generic }
+		//       {Sarttuu[731399/76561198089400492] was killed by 7645878[29630/7645878] 0 Generic } // FIXME: According to @Karsiss, this is actually a scientist!
+		//       {๖ۣۜZeUz[902806/76561197985407799] was killed by Hunger 0 Generic }
+
 		if packet.Identifier == GenericIdentifier && packet.Type == GenericType {
 			// Check if this is a valid status message
 			statusRegexMatches := statusRegex.FindStringSubmatch(message)
@@ -163,25 +183,31 @@ func Initialize(handler *eventhandler.EventHandler) {
 				} else {
 					// log.Println("Received new status:", Status)
 
+					// TODO: Refactor the format like so:
+					//       Playing "1/64 (2 joining, 3 queued)"
+					//       Playing "1/64 (2 joining)"
+					//       Playing "1/64 (2 queued)"
+					//       Playing "1/64"
+
 					// Handle message formatting depending on how many players there are
-					prefix := "with "
-					suffix := " players"
-					message := prefix + strconv.Itoa(Status.CurrentPlayers) + suffix
-					if Status.CurrentPlayers == 0 {
-						prefix = ""
-						suffix = ""
-						message = "all alone :("
-					} else if Status.CurrentPlayers == 1 {
-						prefix = "with "
-						suffix := " player"
-						message = prefix + strconv.Itoa(Status.CurrentPlayers) + suffix
+					suffix := ""
+
+					if Status.JoiningPlayers > 0 && Status.QueuedPlayers > 0 {
+						suffix = " (" + strconv.Itoa(Status.JoiningPlayers) + " joining, " + strconv.Itoa(Status.QueuedPlayers) + " queued)"
+					} else if Status.JoiningPlayers > 0 {
+						suffix = " (" + strconv.Itoa(Status.JoiningPlayers) + " joining)"
+					} else if Status.QueuedPlayers > 0 {
+						suffix = " (" + strconv.Itoa(Status.QueuedPlayers) + " queued)"
 					}
+					message := strconv.Itoa(Status.CurrentPlayers) + "/" + strconv.Itoa(Status.MaxPlayers) + suffix
 					// log.Println("Status updated, emitting status message:", message)
-					eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: message, Type: eventhandler.StatusType})
+					eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: Status.Hostname, Message: message, Type: eventhandler.StatusType})
 					return
 				}
 			}
 		}
+
+		//log.Println("Parsed message as packet:", packet)
 
 		// Handle different type conversions
 		if packet.Identifier == ChatIdentifier && packet.Type == ChatType {
@@ -202,6 +228,7 @@ func Initialize(handler *eventhandler.EventHandler) {
 		} else {
 			joinRegexMatches := joinRegex.FindStringSubmatch(packet.Message)
 			disconnectRegexMatches := disconnectRegex.FindStringSubmatch(packet.Message)
+			killRegexMatches := killRegex.FindStringSubmatch(packet.Message)
 			if len(joinRegexMatches) > 1 {
 				// log.Println("Matched joinRegex:", joinRegexMatches)
 				userID, _ := strconv.ParseUint(joinRegexMatches[3], 10, 64)
@@ -214,6 +241,64 @@ func Initialize(handler *eventhandler.EventHandler) {
 				disconnectPacket := DisconnectPacket{IP: disconnectRegexMatches[1], Port: disconnectRegexMatches[2], UserID: userID, Username: disconnectRegexMatches[4]}
 				// log.Println("Disconnect packet:", disconnectPacket)
 				eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: disconnectPacket.Username, Message: "left", Type: eventhandler.DisconnectType})
+			} else if len(killRegexMatches) > 1 {
+				// Construct a simple "dictionary" using the named capture groups
+				result := make(map[string]string)
+				for i, name := range killRegex.SubexpNames() {
+					if i != 0 && name != "" {
+						result[name] = killRegexMatches[i]
+					}
+				}
+
+				// Store individual entries in local variables
+				victim := result["victim"]
+				//victimID := result["victimid"]
+				how := result["how"]
+				killer := result["killer"]
+				//killerID := result["killerid"]
+				reason := result["reason"]
+
+				// Remove potentially leaking IDs
+				victim = removeIDsRegex.ReplaceAllString(victim, "")
+				killer = removeIDsRegex.ReplaceAllString(killer, "")
+
+				// Reformat the death reason
+				reason = strings.ToLower(reason)
+				reason = strings.Replace(reason, "(", "", -1)
+				reason = strings.Replace(reason, ")", "", -1)
+
+				/*log.Println("killRegexMatches:", killRegexMatches)
+				log.Println("result:", result)
+				log.Println("victim:", victim)
+				log.Println("victimID:", victimID)
+				log.Println("how:", how)
+				log.Println("killer:", killer)
+				log.Println("killerID:", killerID)
+				log.Println("reason:", reason)*/
+
+				// Construct the death message
+				deathMessage := ""
+				if len(victim) > 0 && len(how) > 0 && len(killer) > 0 && len(reason) == 0 {
+					// "PlayerA was killed by PlayerB"
+					deathMessage = victim + " " + how + " " + killer
+				} else if len(victim) > 0 && len(how) > 0 && len(reason) > 0 {
+					if len(how) == 4 {
+						// "PlayerA died fall"
+						deathMessage = victim + " " + how + " from " + reason
+					} else {
+						// "PlayerA was killed by Hunger"
+						deathMessage = victim + " " + how + " " + reason
+					}
+				} else {
+					// TODO: What if our error handler DM'd us any errors? That'd be super cool and useful!
+					log.Println("NOTICE: Could not parse death message:", message)
+					return
+				}
+
+				// TODO: I wonder if we should also send this to the game? Same for player join/leave?
+				// Send the death message
+				//log.Println("Sending death message to Discord:", deathMessage)
+				eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: deathMessage, Type: eventhandler.KillType})
 			} else {
 				// log.Println("Did not match any regex")
 			}
@@ -263,6 +348,12 @@ func Initialize(handler *eventhandler.EventHandler) {
 
 // Close will gracefully shutdown and cleanup the Webrcon connection
 func Close() {
+	// Send shutdown message to Discord
+	eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "Going away, see you in a bit!", Type: eventhandler.ServerDisconnectedType})
+
+	// Sleep for a bit before shutting down
+	time.Sleep(1 * time.Second)
+
 	log.Println("Shutting down the Webrcon client..")
 	eventHandler.RemoveListener("receive_discord_message", discordMessageHandler)
 	websocketClient.Close()
