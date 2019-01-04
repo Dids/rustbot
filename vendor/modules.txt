@@ -9,7 +9,7 @@ github.com/joho/godotenv
 github.com/sacOO7/go-logger
 # github.com/sacOO7/gowebsocket v0.0.0-20180719182212-1436bb906a4e
 github.com/sacOO7/gowebsocket
-# golang.org/x/crypto v0.0.0-20181203042331-505ab145d0a9
+# golang.org/x/crypto v0.0.0-20190103213133-ff983b9c42bc
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/poly1305

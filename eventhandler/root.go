@@ -16,8 +16,14 @@ const (
 	JoinType MessageType = "Join"
 	// DisconnectType is a message type
 	DisconnectType MessageType = "Disconnect"
+	// KillType is a message type
+	KillType MessageType = "Kill"
 	// StatusType is a message type
 	StatusType MessageType = "Status"
+	// ServerConnectedType is a message type
+	ServerConnectedType MessageType = "ServerConnected"
+	// ServerDisconnectedType is a message type
+	ServerDisconnectedType MessageType = "ServerDisconnected"
 )
 
 // Message is used for emitting data through the EventHandler
