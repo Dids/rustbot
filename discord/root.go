@@ -171,10 +171,29 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 			log.Println("ERROR: Failed to send message to Discord:", message, err)
 		}
 		return
-	} else if message.Type == eventhandler.KillType {
-		if _, err := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_BOT_CHANNEL_ID"), "_"+message.Message+"_"); err != nil {
+	} else if message.Type == eventhandler.PvPKillType || message.Type == eventhandler.OtherKillType {
+		// Ignore PvP deaths if disabled
+		if os.Getenv("KILLFEED_PVP_ENABLED") != "true" && message.Type == eventhandler.PvPKillType {
+			return
+		}
+
+		// Ignore Other deaths if disabled
+		if os.Getenv("KILLFEED_OTHER_ENABLED") != "true" && message.Type == eventhandler.OtherKillType {
+			return
+		}
+
+		// Send deaths to the main channel by default
+		channelID := os.Getenv("DISCORD_BOT_CHANNEL_ID")
+
+		// If the "kill feed" channel is set, override the channel
+		if len(os.Getenv("KILLFEED_CHANNEL_ID")) > 0 {
+			channelID = os.Getenv("KILLFEED_CHANNEL_ID")
+		}
+
+		if _, err := discord.Client.ChannelMessageSend(channelID, "_"+message.Message+"_"); err != nil {
 			log.Println("ERROR: Failed to send message to Discord:", message, err)
 		}
+
 		return
 	}
 

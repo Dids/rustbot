@@ -29,6 +29,9 @@ ENV DISCORD_BOT_CHANNEL_ID  ""
 ENV WEBRCON_HOST            "localhost"
 ENV WEBRCON_PORT            "28016"
 ENV WEBRCON_PASSWORD        ""
+ENV KILLFEED_CHANNEL_ID     ""
+ENV KILLFEED_PVP_ENABLED    "true"
+ENV KILLFEED_OTHER_ENABLED  "false"
 
 # Run the binary
 ENTRYPOINT ["/go/bin/rustbot"]
