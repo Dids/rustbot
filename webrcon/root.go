@@ -255,6 +255,9 @@ func Initialize(handler *eventhandler.EventHandler) {
 					}
 				}
 
+				// Keep track of the type of kill/death
+				isPvPKill := false
+
 				// Store individual entries in local variables
 				victim := result["victim"]
 				victimID := result["victimid"]
@@ -311,6 +314,9 @@ func Initialize(handler *eventhandler.EventHandler) {
 				if len(victim) > 0 && len(victimID) > 0 && len(how) > 0 && len(killer) > 0 && len(killerID) > 0 && len(reason) == 0 {
 					// "PlayerA was killed by PlayerB"
 					deathMessage = victim + " " + how + " " + killer
+
+					// Mark this as a PvP kill
+					isPvPKill = true
 				} else if len(victim) > 0 && len(victimID) > 0 && len(how) > 0 && len(reason) > 0 {
 					if len(how) == 4 {
 						// "PlayerA died fall"
@@ -328,7 +334,11 @@ func Initialize(handler *eventhandler.EventHandler) {
 				// TODO: I wonder if we should also send this to the game? Same for player join/leave?
 				// Send the death message
 				//log.Println("Sending death message to Discord:", deathMessage)
-				eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: deathMessage, Type: eventhandler.KillType})
+				messageType := eventhandler.OtherKillType
+				if isPvPKill {
+					messageType = eventhandler.PvPKillType
+				}
+				eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: deathMessage, Type: messageType})
 			} else {
 				// log.Println("Did not match any regex")
 			}

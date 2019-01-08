@@ -16,8 +16,10 @@ const (
 	JoinType MessageType = "Join"
 	// DisconnectType is a message type
 	DisconnectType MessageType = "Disconnect"
-	// KillType is a message type
-	KillType MessageType = "Kill"
+	// OtherKillType is a message type
+	OtherKillType MessageType = "Other"
+	// PvPKillType is a message type
+	PvPKillType MessageType = "PvP"
 	// StatusType is a message type
 	StatusType MessageType = "Status"
 	// ServerConnectedType is a message type
