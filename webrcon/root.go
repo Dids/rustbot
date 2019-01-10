@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -535,8 +536,12 @@ func incrementFieldForSteamID(database *database.Database, field string, steamID
 		return errors.New("User is nil or invalid, cannot increment field: " + field)
 	}
 
-	// Increment the field
-	user[field] = user[field].(float64) + 1
+	// Increment the field (with a hack that accounts for JSON unmarshaling converting ints to floats)
+	if reflect.TypeOf(user[field]).Kind() == reflect.Float64 {
+		user[field] = int(user[field].(float64)) + 1
+	} else {
+		user[field] = user[field].(int) + 1
+	}
 	// log.Println("Incremented field", field, "to", user[field])
 
 	// Update the user in the database

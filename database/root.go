@@ -11,7 +11,7 @@ import (
 // https://github.com/HouzuoGuo/tiedot/blob/master/examples/example.go
 
 // DatabasePath is the directory where the database files are stored
-const DatabasePath = "./.db"
+const DatabasePath = ".db"
 
 // Database is an abstraction for the backing database
 type Database struct {
@@ -29,13 +29,14 @@ func NewDatabase() (*Database, error) {
 		return nil, err
 	}
 	database.Path = dbPath
-	log.Println("Database path:", database.Path)
 
 	return database, nil
 }
 
 // Open the database
 func (database *Database) Open() error {
+	log.Println("Opening database:", database.Path)
+
 	// Open the database (creates a new one if it doesn't yet exist)
 	newDB, err := db.OpenDB(database.Path)
 	if err != nil {
@@ -48,6 +49,7 @@ func (database *Database) Open() error {
 
 // Close the database
 func (database *Database) Close() error {
+	log.Println("Closing the database..")
 	return database.Client.Close()
 }
 
@@ -197,7 +199,7 @@ func (database *Database) createIndexes(collection *db.Col, indexes []string) er
 		if err := collection.Index([]string{index}); err != nil {
 			continue
 		}
-		log.Println("Added new index for key:", index)
+		//log.Println("Added new index for key:", index)
 	}
 
 	// Return nil on success
@@ -208,6 +210,10 @@ func getDatabasePath() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
+	}
+
+	if cwd == "/" {
+		return cwd + DatabasePath, nil
 	}
 	//return cwd + "/../" + DatabasePath, nil
 	return cwd + "/" + DatabasePath, nil
