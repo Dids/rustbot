@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -19,10 +18,10 @@ var eventHandler eventhandler.EventHandler
 
 func main() {
 	// Print a banner
-	fmt.Println("-----------------")
-	fmt.Println("---  RustBot  ---")
-	fmt.Println("-----------------")
-	fmt.Println("")
+	log.Println("-----------------")
+	log.Println("---  RustBot  ---")
+	log.Println("-----------------")
+	log.Println("")
 
 	// Initialize our own event handler
 	eventHandler = eventhandler.EventHandler{Name: "rustbot", Listeners: nil}
@@ -30,19 +29,19 @@ func main() {
 	// Initialize and open the Database
 	database, databaseErr := database.NewDatabase()
 	if databaseErr != nil {
-		log.Panic(databaseErr)
+		log.Panic("Failed to initialize database:", databaseErr)
 	}
 	if databaseErr = database.Open(); databaseErr != nil {
-		log.Panic(databaseErr)
+		log.Panic("Failed to open database:", databaseErr)
 	}
 
 	// Initialize and open the Discord client
 	discord, discordErr := discord.NewDiscord(&eventHandler, database)
 	if discordErr != nil {
-		log.Panic(discordErr)
+		log.Panic("Failed to initialize Discord:", discordErr)
 	}
 	if discordErr = discord.Open(); discordErr != nil {
-		log.Panic(discordErr)
+		log.Panic("Failed to open Discord:", discordErr)
 	}
 
 	// TODO: Shouldn't we follow the same logic here, so having a separate "Open()" function?

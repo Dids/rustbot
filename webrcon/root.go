@@ -507,6 +507,16 @@ func incrementDeathCount(database *database.Database, victimID string) error {
 }
 
 func incrementFieldForSteamID(database *database.Database, field string, steamID string) error {
+	if database == nil || database.Client == nil {
+		return errors.New("Database is nil")
+	}
+	if len(field) <= 0 {
+		return errors.New("field is nil or invalid")
+	}
+	if len(steamID) <= 0 {
+		return errors.New("steamID is nil or invalid")
+	}
+
 	// Find the matching user
 	user := make(map[string]interface{})
 	matches, err := database.Query("users", `[{"eq": "`+steamID+`", "in": ["SteamID"]}]`)
