@@ -507,6 +507,7 @@ func incrementDeathCount(database *database.Database, victimID string) error {
 }
 
 func incrementFieldForSteamID(database *database.Database, field string, steamID string) error {
+	log.Println("Validating arguments")
 	if database == nil || database.Client == nil {
 		return errors.New("Database is nil")
 	}
@@ -517,6 +518,7 @@ func incrementFieldForSteamID(database *database.Database, field string, steamID
 		return errors.New("steamID is nil or invalid")
 	}
 
+	log.Println("Finding matching user")
 	// Find the matching user
 	user := make(map[string]interface{})
 	matches, err := database.Query("users", `[{"eq": "`+steamID+`", "in": ["SteamID"]}]`)
@@ -524,6 +526,7 @@ func incrementFieldForSteamID(database *database.Database, field string, steamID
 		return err
 	}
 
+	log.Println("Creating object id")
 	// Create the object id (or use the existing one, if available)
 	objectID := 0
 	for id := range matches {
@@ -531,6 +534,7 @@ func incrementFieldForSteamID(database *database.Database, field string, steamID
 		break
 	}
 
+	log.Println("Validating arguments")
 	// Get the existing user object or create a new one
 	if len(matches) > 0 {
 		user = matches[objectID]
@@ -541,19 +545,22 @@ func incrementFieldForSteamID(database *database.Database, field string, steamID
 		}
 	}
 
+	log.Println("Verifying user is valid")
 	// Verify that the user object is valid
 	if user == nil || len(user) <= 0 {
 		return errors.New("User is nil or invalid, cannot increment field: " + field)
 	}
 
+	log.Println("Incrementing field")
 	// Increment the field (with a hack that accounts for JSON unmarshaling converting ints to floats)
 	if reflect.TypeOf(user[field]).Kind() == reflect.Float64 {
 		user[field] = int(user[field].(float64)) + 1
 	} else {
 		user[field] = user[field].(int) + 1
 	}
-	// log.Println("Incremented field", field, "to", user[field])
+	log.Println("Incremented field", field, "to", user[field])
 
+	log.Println("Updating user in database")
 	// Update the user in the database
 	if _, err := database.Set("users", objectID, user); err != nil {
 		return err
