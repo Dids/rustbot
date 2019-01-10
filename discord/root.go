@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/Dids/rustbot/database"
 	"github.com/Dids/rustbot/eventhandler"
 	"github.com/bwmarrin/discordgo"
 )
@@ -20,13 +21,14 @@ var escapeMarkdownRegex = regexp.MustCompile(`(\*|_|` + "`" + `|~|\\)`)
 type Discord struct {
 	Client                *discordgo.Session
 	EventHandler          *eventhandler.EventHandler
+	Database              *database.Database
 	WebrconMessageHandler chan eventhandler.Message
 	HasPresence           bool
 	IsReady               bool
 }
 
 // NewDiscord creates and returns a new instance of Discord
-func NewDiscord(handler *eventhandler.EventHandler) (*Discord, error) {
+func NewDiscord(handler *eventhandler.EventHandler, db *database.Database) (*Discord, error) {
 	discord := &Discord{}
 
 	// Initialize the Discord client
@@ -53,6 +55,9 @@ func NewDiscord(handler *eventhandler.EventHandler) (*Discord, error) {
 		}
 	}()
 
+	// Store the database reference
+	discord.Database = db
+
 	return discord, nil
 }
 
@@ -69,6 +74,7 @@ func (discord *Discord) Close() error {
 
 func (discord *Discord) handleConnect(session *discordgo.Session, event *discordgo.Connect) {
 	log.Println("NOTICE: Discord event: connect")
+	discord.IsReady = true
 }
 
 func (discord *Discord) handleDisconnect(session *discordgo.Session, event *discordgo.Disconnect) {
@@ -174,11 +180,13 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 	} else if message.Type == eventhandler.PvPKillType || message.Type == eventhandler.OtherKillType {
 		// Ignore PvP deaths if disabled
 		if os.Getenv("KILLFEED_PVP_ENABLED") != "true" && message.Type == eventhandler.PvPKillType {
+			// log.Println("Ignoring PvP kill, feed is disabled", os.Getenv("KILLFEED_PVP_ENABLED"))
 			return
 		}
 
 		// Ignore Other deaths if disabled
 		if os.Getenv("KILLFEED_OTHER_ENABLED") != "true" && message.Type == eventhandler.OtherKillType {
+			// log.Println("Ignoring other kill, feed is disabled", os.Getenv("KILLFEED_OTHER_ENABLED"))
 			return
 		}
 

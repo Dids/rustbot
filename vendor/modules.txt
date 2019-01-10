@@ -1,3 +1,9 @@
+# github.com/HouzuoGuo/tiedot v0.0.0-20180104213538-791033267fb3
+github.com/HouzuoGuo/tiedot/db
+github.com/HouzuoGuo/tiedot/data
+github.com/HouzuoGuo/tiedot/dberr
+github.com/HouzuoGuo/tiedot/tdlog
+github.com/HouzuoGuo/tiedot/gommap
 # github.com/bwmarrin/discordgo v0.19.0
 github.com/bwmarrin/discordgo
 # github.com/gorilla/websocket v1.4.0

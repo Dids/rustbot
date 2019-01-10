@@ -7,9 +7,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/Dids/rustbot/database"
 	"github.com/Dids/rustbot/discord"
 	"github.com/Dids/rustbot/eventhandler"
 	"github.com/Dids/rustbot/webrcon"
+
 	_ "github.com/joho/godotenv/autoload"
 )
 
@@ -25,17 +27,27 @@ func main() {
 	// Initialize our own event handler
 	eventHandler = eventhandler.EventHandler{Name: "rustbot", Listeners: nil}
 
-	// Initialize the Discord client
-	discord, err := discord.NewDiscord(&eventHandler)
-	if err != nil {
-		log.Panic(err)
+	// Initialize and open the Database
+	database, databaseErr := database.NewDatabase()
+	if databaseErr != nil {
+		log.Panic(databaseErr)
 	}
-	if err = discord.Open(); err != nil {
-		log.Panic(err)
+	if databaseErr = database.Open(); databaseErr != nil {
+		log.Panic(databaseErr)
 	}
 
-	// Initialize the Webrcon Client
-	webrcon.Initialize(&eventHandler)
+	// Initialize and open the Discord client
+	discord, discordErr := discord.NewDiscord(&eventHandler, database)
+	if discordErr != nil {
+		log.Panic(discordErr)
+	}
+	if discordErr = discord.Open(); discordErr != nil {
+		log.Panic(discordErr)
+	}
+
+	// TODO: Shouldn't we follow the same logic here, so having a separate "Open()" function?
+	// Initialize the Webrcon Client (opens the connection automatically)
+	webrcon.Initialize(&eventHandler, database)
 
 	// TODO: Implement and setup event handlers for both Discord and Webrcon clients, so they can pass messages between each other
 
@@ -49,6 +61,9 @@ func main() {
 	// Properly dispose of the clients when exiting
 	webrcon.Close()
 	if err := discord.Close(); err != nil {
+		log.Panic(err)
+	}
+	if err := database.Close(); err != nil {
 		log.Panic(err)
 	}
 }
