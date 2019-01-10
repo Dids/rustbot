@@ -106,8 +106,8 @@ type StatusPacket struct {
 func Initialize(handler *eventhandler.EventHandler, database *database.Database) {
 	log.Println("Initializing the Webrcon client..")
 
-	// Get a reference to the "pvp" collection
-	pvpCollection, err := database.GetCollection("pvp")
+	// Get a reference to the users collection
+	pvpCollection, err := database.GetCollection("users")
 	if err != nil {
 		// TODO: As part of the "NewWebrcon" rewrite, have this return as an error instead
 		panic(err)
@@ -360,20 +360,20 @@ func Initialize(handler *eventhandler.EventHandler, database *database.Database)
 					}
 
 					/*// Find the killer
-					kid, err := db.Get("pvp", killerID)
+					kid, err := db.Get("users", killerID)
 					if err != nil {
 						log.Println("ERROR: ", err)
 					}
 
 					// TODO: Update the kill count for the killer
-					if _, err := db.Set("pvp", map[string]interface{}{
+					if _, err := db.Set("users", map[string]interface{}{
 						"SteamID": killerID,
 						"Name":    killer}); err != nil {
 						log.Println("ERROR: ", err)
 					}
 
 					// TODO: Update the death count for the victim
-					if _, err := db.Set("pvp", map[string]interface{}{
+					if _, err := db.Set("users", map[string]interface{}{
 						"SteamID": victimID,
 						"Name":    victim}); err != nil {
 						log.Println("ERROR: ", err)
@@ -499,17 +499,17 @@ func removeDuplicates(elements []int) []int {
 }
 
 func incrementKillCount(database *database.Database, killerID string) error {
-	return incrementFieldForSteamID(database, "kills", killerID)
+	return incrementFieldForSteamID(database, "Kills", killerID)
 }
 
 func incrementDeathCount(database *database.Database, victimID string) error {
-	return incrementFieldForSteamID(database, "deaths", victimID)
+	return incrementFieldForSteamID(database, "Deaths", victimID)
 }
 
 func incrementFieldForSteamID(database *database.Database, field string, steamID string) error {
 	// Find the matching user
 	user := make(map[string]interface{})
-	matches, err := database.Query("pvp", `[{"eq": "`+steamID+`", "in": ["SteamID"]}]`)
+	matches, err := database.Query("users", `[{"eq": "`+steamID+`", "in": ["SteamID"]}]`)
 	if err != nil {
 		return err
 	}
@@ -545,7 +545,7 @@ func incrementFieldForSteamID(database *database.Database, field string, steamID
 	// log.Println("Incremented field", field, "to", user[field])
 
 	// Update the user in the database
-	if _, err := database.Set("pvp", objectID, user); err != nil {
+	if _, err := database.Set("users", objectID, user); err != nil {
 		return err
 	}
 
