@@ -33,5 +33,8 @@ ENV KILLFEED_CHANNEL_ID     ""
 ENV KILLFEED_PVP_ENABLED    "true"
 ENV KILLFEED_OTHER_ENABLED  "false"
 
+# Expose volumes
+VOLUME [ "/.db" ]
+
 # Run the binary
 ENTRYPOINT ["/go/bin/rustbot"]

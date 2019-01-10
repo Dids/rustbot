@@ -2,14 +2,18 @@ package webrcon
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Dids/rustbot/database"
 	"github.com/Dids/rustbot/eventhandler"
+
 	"github.com/sacOO7/gowebsocket"
 )
 
@@ -99,8 +103,18 @@ type StatusPacket struct {
 }
 
 // Initialize will create and open a new Webrcon connection
-func Initialize(handler *eventhandler.EventHandler) {
+func Initialize(handler *eventhandler.EventHandler, database *database.Database) {
 	log.Println("Initializing the Webrcon client..")
+
+	// Get a reference to the "pvp" collection
+	pvpCollection, err := database.GetCollection("pvp")
+	if err != nil {
+		// TODO: As part of the "NewWebrcon" rewrite, have this return as an error instead
+		panic(err)
+	}
+
+	// Make sure that required indexes are set
+	pvpCollection.Index([]string{"SteamID"})
 
 	// Initialize the websocket client/connection
 	websocketClient = gowebsocket.New("ws://" + os.Getenv("WEBRCON_HOST") + ":" + os.Getenv("WEBRCON_PORT") + "/" + os.Getenv("WEBRCON_PASSWORD"))
@@ -331,9 +345,44 @@ func Initialize(handler *eventhandler.EventHandler) {
 					return
 				}
 
+				// Store PvP kills/deaths in the database
+				if isPvPKill {
+					// FIXME: How and where do we actually update the user data, like username and such?
+
+					// Increment the kill count for the killer
+					if err := incrementKillCount(database, killerID); err != nil {
+						log.Println("Failed to increment kill count: ", err)
+					}
+
+					// Increment the death count for the victim
+					if err := incrementDeathCount(database, victimID); err != nil {
+						log.Println("Failed to increment death count: ", err)
+					}
+
+					/*// Find the killer
+					kid, err := db.Get("pvp", killerID)
+					if err != nil {
+						log.Println("ERROR: ", err)
+					}
+
+					// TODO: Update the kill count for the killer
+					if _, err := db.Set("pvp", map[string]interface{}{
+						"SteamID": killerID,
+						"Name":    killer}); err != nil {
+						log.Println("ERROR: ", err)
+					}
+
+					// TODO: Update the death count for the victim
+					if _, err := db.Set("pvp", map[string]interface{}{
+						"SteamID": victimID,
+						"Name":    victim}); err != nil {
+						log.Println("ERROR: ", err)
+						}*/
+				}
+
 				// TODO: I wonder if we should also send this to the game? Same for player join/leave?
 				// Send the death message
-				//log.Println("Sending death message to Discord:", deathMessage)
+				// log.Println("Sending death message to Discord:", deathMessage)
 				messageType := eventhandler.OtherKillType
 				if isPvPKill {
 					messageType = eventhandler.PvPKillType
@@ -447,4 +496,58 @@ func removeDuplicates(elements []int) []int {
 	}
 	// Return the new slice.
 	return result
+}
+
+func incrementKillCount(database *database.Database, killerID string) error {
+	return incrementFieldForSteamID(database, "kills", killerID)
+}
+
+func incrementDeathCount(database *database.Database, victimID string) error {
+	return incrementFieldForSteamID(database, "deaths", victimID)
+}
+
+func incrementFieldForSteamID(database *database.Database, field string, steamID string) error {
+	// Find the matching user
+	user := make(map[string]interface{})
+	matches, err := database.Query("pvp", `[{"eq": "`+steamID+`", "in": ["SteamID"]}]`)
+	if err != nil {
+		return err
+	}
+
+	// Create the object id (or use the existing one, if available)
+	objectID := 0
+	for id := range matches {
+		objectID = id
+		break
+	}
+
+	// Get the existing user object or create a new one
+	if len(matches) > 0 {
+		user = matches[objectID]
+	} else {
+		user = map[string]interface{}{
+			"SteamID": steamID,
+			field:     0,
+		}
+	}
+
+	// Verify that the user object is valid
+	if user == nil || len(user) <= 0 {
+		return errors.New("User is nil or invalid, cannot increment field: " + field)
+	}
+
+	// Increment the field (with a hack that accounts for JSON unmarshaling converting ints to floats)
+	if reflect.TypeOf(user[field]).Kind() == reflect.Float64 {
+		user[field] = int(user[field].(float64)) + 1
+	} else {
+		user[field] = user[field].(int) + 1
+	}
+	// log.Println("Incremented field", field, "to", user[field])
+
+	// Update the user in the database
+	if _, err := database.Set("pvp", objectID, user); err != nil {
+		return err
+	}
+
+	return nil
 }
