@@ -1,7 +1,6 @@
 .docker/
 .db/
 .vscode/
-#vendor/
 .env*
 coverage.txt
 rustbot

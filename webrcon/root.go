@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 	"os"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -152,7 +151,7 @@ func Initialize(handler *eventhandler.EventHandler, database *database.Database)
 		// FIXME: Remove these when done
 		// message = `{ "Message": "109.240.100.173:18521/76561198806240991/Veru joined [windows/76561198806240991]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 		// message = `{ "Message": "109.240.100.173:18521/76561198806240991/Veru disconnecting: disconnect", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
-		// message = `{ "Message": "MurmeliOP[263066/76561198113377601] was killed by Vildemare[937684/76561198012399365]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
+		message = `{ "Message": "MurmeliOP[263066/76561198113377601] was killed by Vildemare[937684/76561198012399365]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 		// message = `{ "Message": "Sarttuu[731399/76561198089400492] was killed by 7645878[29630/7645878]", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 		// message = `{ "Message": "๖ۣۜZeUz[902806/76561197985407799] was killed by Hunger", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
 		// message = `{ "Message": "Tepachu[527565/76561198079774759] died (Fall)", "Identifier": 0, "Type": "Generic", "StackTrace": "" }`
@@ -507,6 +506,16 @@ func incrementDeathCount(database *database.Database, victimID string) error {
 }
 
 func incrementFieldForSteamID(database *database.Database, field string, steamID string) error {
+	if database == nil || database.Client == nil {
+		return errors.New("Database is nil")
+	}
+	if len(field) <= 0 {
+		return errors.New("field is nil or invalid")
+	}
+	if len(steamID) <= 0 {
+		return errors.New("steamID is nil or invalid")
+	}
+
 	// Find the matching user
 	user := make(map[string]interface{})
 	matches, err := database.Query("users", `[{"eq": "`+steamID+`", "in": ["SteamID"]}]`)
@@ -537,12 +546,11 @@ func incrementFieldForSteamID(database *database.Database, field string, steamID
 	}
 
 	// Increment the field (with a hack that accounts for JSON unmarshaling converting ints to floats)
-	if reflect.TypeOf(user[field]).Kind() == reflect.Float64 {
-		user[field] = int(user[field].(float64)) + 1
-	} else {
-		user[field] = user[field].(int) + 1
+	floatValue, ok := user[field].(float64)
+	if ok {
+		intValue := int(floatValue)
+		user[field] = intValue
 	}
-	// log.Println("Incremented field", field, "to", user[field])
 
 	// Update the user in the database
 	if _, err := database.Set("users", objectID, user); err != nil {
