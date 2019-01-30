@@ -80,6 +80,13 @@ func (discord *Discord) handleConnect(session *discordgo.Session, event *discord
 func (discord *Discord) handleDisconnect(session *discordgo.Session, event *discordgo.Disconnect) {
 	log.Println("NOTICE: Discord event: disconnect")
 	discord.IsReady = false
+
+	// FIXME: We need to be able to reconnect, or at the very least exit the process, so we can at least recover that way
+
+	// Notify the primary process to shut down
+	process, _ := os.FindProcess(os.Getpid())
+	process.Signal(os.Interrupt)
+	return
 }
 
 func (discord *Discord) handleRateLimit(session *discordgo.Session, event *discordgo.RateLimit) {
@@ -165,10 +172,10 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 		// Update presence
 		// log.Println("Received status message, updating presence:", message.Message)
 		if err := discord.updateNickname(message.User); err != nil {
-			log.Println("NOTICE:", err)
+			log.Println("ERROR:", err)
 		}
 		if err := discord.updatePresence(message.Message); err != nil {
-			log.Println("NOTICE:", err)
+			log.Println("ERROR:", err)
 		}
 		return
 		// Handle server connect/disconnect messages
@@ -217,7 +224,7 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 
 func (discord *Discord) updateNickname(nickname string) error {
 	if !discord.IsReady {
-		return errors.New("Can't update nickname, Discord not ready")
+		return errors.New("Can't update nickname, Discord not ready (discord.IsReady = false)")
 	}
 
 	// Set the nickname
@@ -240,7 +247,12 @@ func (discord *Discord) updateNickname(nickname string) error {
 		}
 		// log.Println("Successfully updated the nickname:", string(updateNicknameResponse))
 	} else {
-		return errors.New("Can't update presence, Discord client is nil or not ready")
+		if discord.Client == nil {
+			return errors.New("Can't update nickname, Discord client is nil (discord.Client = nil)")
+		} else if !discord.Client.DataReady {
+			return errors.New("Can't update nickname, Discord client is not ready (discord.Client.DataReady = false)")
+		}
+		return errors.New("Can't update nickname, unknown issue with Discord client")
 	}
 
 	return nil
@@ -248,7 +260,7 @@ func (discord *Discord) updateNickname(nickname string) error {
 
 func (discord *Discord) updatePresence(presence string) error {
 	if !discord.IsReady {
-		return errors.New("Can't update presence, Discord not ready")
+		return errors.New("Can't update presence, Discord not ready (discord.IsReady = false)")
 	}
 
 	// Set the presence
@@ -259,7 +271,12 @@ func (discord *Discord) updatePresence(presence string) error {
 		}
 		discord.HasPresence = true
 	} else {
-		return errors.New("Can't update presence, Discord client is nil or not ready")
+		if discord.Client == nil {
+			return errors.New("Can't update presence, Discord client is nil (discord.Client = nil)")
+		} else if !discord.Client.DataReady {
+			return errors.New("Can't update presence, Discord client is not ready (discord.Client.DataReady = false)")
+		}
+		return errors.New("Can't update presence, unknown issue with Discord client")
 	}
 
 	return nil

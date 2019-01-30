@@ -26,6 +26,9 @@ clean:
 deps:
 	go build -v $(EXTRA_FLAGS) ./...
 
+tidy:
+  go mod tidy
+
 upgrade:
 	go get -u ./...
 	go mod vendor

@@ -1,4 +1,4 @@
-# github.com/HouzuoGuo/tiedot v0.0.0-20180104213538-791033267fb3
+# github.com/HouzuoGuo/tiedot v0.0.0-20190123063644-be8ab1f1598e
 github.com/HouzuoGuo/tiedot/db
 github.com/HouzuoGuo/tiedot/data
 github.com/HouzuoGuo/tiedot/dberr
@@ -15,7 +15,7 @@ github.com/joho/godotenv
 github.com/sacOO7/go-logger
 # github.com/sacOO7/gowebsocket v0.0.0-20180719182212-1436bb906a4e
 github.com/sacOO7/gowebsocket
-# golang.org/x/crypto v0.0.0-20190103213133-ff983b9c42bc
+# golang.org/x/crypto v0.0.0-20190129210102-ccddf3741a0c
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/poly1305
