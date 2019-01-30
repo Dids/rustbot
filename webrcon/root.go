@@ -115,6 +115,7 @@ func Initialize(handler *eventhandler.EventHandler, database *database.Database)
 	// Make sure that required indexes are set
 	pvpCollection.Index([]string{"SteamID"})
 
+	// TODO: I've hard that webrcon now supports SSL/wss, but it doesn't seem to work "as is" yet, unless https needs to be working first?
 	// Initialize the websocket client/connection
 	websocketClient = gowebsocket.New("ws://" + os.Getenv("WEBRCON_HOST") + ":" + os.Getenv("WEBRCON_PORT") + "/" + os.Getenv("WEBRCON_PASSWORD"))
 
@@ -140,6 +141,7 @@ func Initialize(handler *eventhandler.EventHandler, database *database.Database)
 		eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "Cannot connect to server!", Type: eventhandler.ServerDisconnectedType})
 
 		// Notify the primary process to shut down
+		log.Println("NOTICE: Shutting down!")
 		process, _ := os.FindProcess(os.Getpid())
 		process.Signal(os.Interrupt)
 		return

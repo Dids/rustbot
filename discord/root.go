@@ -84,6 +84,7 @@ func (discord *Discord) handleDisconnect(session *discordgo.Session, event *disc
 	// FIXME: We need to be able to reconnect, or at the very least exit the process, so we can at least recover that way
 
 	// Notify the primary process to shut down
+	log.Println("NOTICE: Shutting down!")
 	process, _ := os.FindProcess(os.Getpid())
 	process.Signal(os.Interrupt)
 	return
