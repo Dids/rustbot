@@ -27,7 +27,7 @@ deps:
 	go build -v $(EXTRA_FLAGS) ./...
 
 tidy:
-  go mod tidy
+	go mod tidy
 
 upgrade:
 	go get -u ./...
