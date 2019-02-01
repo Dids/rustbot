@@ -8,10 +8,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Dids/rustbot/database"
 	"github.com/Dids/rustbot/eventhandler"
+	"github.com/gorilla/websocket"
 
 	"github.com/sacOO7/gowebsocket"
 )
@@ -27,6 +29,22 @@ var killRegex = regexp.MustCompile(`(?P<victim>.+?)(?:\[(?:[0-9]+?)\/(?P<victimi
 var statusRegex = regexp.MustCompile(`(?:.*?hostname:\s*(?P<hostname>.*?)\\n)(?:.*?version\s*:\s*(?P<version>\d+) )(?:.*?secure\s*\((?P<secure>.*?)\)\\n)(?:.*?map\s*:\s*(?P<map>.*?)\\n)(?:.*?players\s*:\s*(?P<players_current>\d+) \((?P<players_max>\d+) max\) \((?P<players_queued>\d+) queued\) \((?P<players_joining>\d+) joining\)\\n)`)
 var removeIDsRegex = regexp.MustCompile(`\[.+?\/.+?\]`)
 var removeBracesRegex = regexp.MustCompile(`(?:.+)( \(.+\))`)
+
+const (
+	// Time allowed to write a message to the peer
+	writeWait = 10 * time.Second
+
+	// Time allowed to read the next pong message from the peer
+	pongWait = 60 * time.Second
+
+	// Send pings to peer with this period. Must be less than pongWait
+	pingPeriod = (pongWait * 9) / 10
+
+	// Maximum message size allowed from peer
+	maxMessageSize = 512
+)
+
+var writeMutex = &sync.Mutex{}
 
 // Status represents the current status of the server
 var Status StatusPacket
@@ -101,6 +119,8 @@ type StatusPacket struct {
 	JoiningPlayers int    `json:"players_joining"`
 }
 
+var isShuttingDown = false
+
 // Initialize will create and open a new Webrcon connection
 func Initialize(handler *eventhandler.EventHandler, database *database.Database) {
 	log.Println("Initializing the Webrcon client..")
@@ -119,8 +139,15 @@ func Initialize(handler *eventhandler.EventHandler, database *database.Database)
 	// Initialize the websocket client/connection
 	websocketClient = gowebsocket.New("ws://" + os.Getenv("WEBRCON_HOST") + ":" + os.Getenv("WEBRCON_PORT") + "/" + os.Getenv("WEBRCON_PASSWORD"))
 
+	// Set maximum received message size
+	//websocketClient.Conn.SetReadLimit(maxMessageSize) // TODO: This can't be used here, and must be used after the connection is created/established
+
 	// Setup websocket event handlers
 	websocketClient.OnConnected = func(socket gowebsocket.Socket) {
+		if isShuttingDown {
+			return
+		}
+
 		log.Println("Connected to server")
 
 		// Send server connected message to Discord
@@ -128,26 +155,53 @@ func Initialize(handler *eventhandler.EventHandler, database *database.Database)
 	}
 
 	websocketClient.OnDisconnected = func(err error, socket gowebsocket.Socket) {
+		if isShuttingDown {
+			return
+		}
+
 		log.Println("Disconnected from server:", err)
 
-		// Send server disconnected message to Discord
-		eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "Disconnected from server!", Type: eventhandler.ServerDisconnectedType})
+		// When a disconnect error occurs, this means that we didn't gracefully shutdown, but the connection was lost etc.
+		if err != nil {
+			// Send server disconnected message to Discord
+			eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "Disconnected from server!", Type: eventhandler.ServerDisconnectedType})
+
+			// Sleep for a bit before shutting down
+			time.Sleep(1 * time.Second)
+
+			// Notify the primary process to shut down
+			log.Println("NOTICE: Disconnected from server, shutting down..")
+			process, _ := os.FindProcess(os.Getpid())
+			process.Signal(os.Interrupt)
+			return
+		}
 	}
 
 	websocketClient.OnConnectError = func(err error, socket gowebsocket.Socket) {
+		if isShuttingDown {
+			return
+		}
+
 		log.Println("Received connect error ", err)
 
 		// Send server disconnected message to Discord
 		eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "Cannot connect to server!", Type: eventhandler.ServerDisconnectedType})
 
+		// Sleep for a bit before shutting down
+		time.Sleep(1 * time.Second)
+
 		// Notify the primary process to shut down
-		log.Println("NOTICE: Shutting down!")
+		log.Println("NOTICE: Could not connect to server, shutting down..")
 		process, _ := os.FindProcess(os.Getpid())
 		process.Signal(os.Interrupt)
 		return
 	}
 
 	websocketClient.OnTextMessage = func(message string, socket gowebsocket.Socket) {
+		if isShuttingDown {
+			return
+		}
+
 		//log.Println("Received message " + message)
 
 		// FIXME: Remove these when done
@@ -399,22 +453,12 @@ func Initialize(handler *eventhandler.EventHandler, database *database.Database)
 		log.Println("Received binary data ", data)
 	}
 
-	websocketClient.OnPingReceived = func(data string, socket gowebsocket.Socket) {
-		// log.Println("Received ping " + data)
-	}
+	/*websocketClient.OnPingReceived = func(data string, socket gowebsocket.Socket) {
+		log.Println("Received ping " + data)
+	}*/
 
 	websocketClient.OnPongReceived = func(data string, socket gowebsocket.Socket) {
-		log.Println("Received pong " + data)
-	}
-
-	// FIXME: We need to be able to reconnect, or at the very least exit the process, so we can at least recover that way
-	websocketClient.OnDisconnected = func(err error, socket gowebsocket.Socket) {
-		log.Println("Disconnected from server ")
-
-		// Notify the primary process to shut down
-		process, _ := os.FindProcess(os.Getpid())
-		process.Signal(os.Interrupt)
-		return
+		//log.Println("Received PONG ", data)
 	}
 
 	// Setup our custom event handler
@@ -430,6 +474,9 @@ func Initialize(handler *eventhandler.EventHandler, database *database.Database)
 	// Finally establish the websocket connetion
 	websocketClient.Connect()
 
+	// Start sending PING messages
+	go startPinging()
+
 	// Start updating status
 	go startUpdatingStatus()
 
@@ -438,13 +485,20 @@ func Initialize(handler *eventhandler.EventHandler, database *database.Database)
 
 // Close will gracefully shutdown and cleanup the Webrcon connection
 func Close() {
+	if isShuttingDown {
+		return
+	}
+
+	log.Println("Shutting down the Webrcon client..")
+
+	isShuttingDown = true
+
 	// Send shutdown message to Discord
 	eventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: "", Message: "Going away, see you in a bit..", Type: eventhandler.ServerDisconnectedType})
 
 	// Sleep for a bit before shutting down
 	time.Sleep(1 * time.Second)
 
-	log.Println("Shutting down the Webrcon client..")
 	eventHandler.RemoveListener("receive_discord_message", discordMessageHandler)
 	websocketClient.Close()
 	log.Println("Successfully shut down the Webrcon client!")
@@ -462,7 +516,10 @@ func handleIncomingDiscordMessage(message eventhandler.Message) {
 	} else {
 		// Relay message to Webrcon
 		// log.Println("!!! SENDING DATA TO WEBRCON SERVER !!!", string(jsonBytes))
+		websocketClient.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+		writeMutex.Lock()
 		websocketClient.SendText(string(jsonBytes))
+		writeMutex.Unlock()
 	}
 }
 
@@ -470,10 +527,32 @@ func handleIncomingDiscordMessage(message eventhandler.Message) {
 //       for example if we start updating after the "ready" websocket
 //       event, as that's where it would make the most sense, right?
 func startUpdatingStatus() {
+	defer func() {
+		log.Println("NOTICE: Stopping status updater..")
+	}()
+
 	for {
+		if isShuttingDown {
+			return
+		}
+
 		// Send "status" command
 		// log.Println("Requesting status..")
+
+		// Lock the write mutex
+		writeMutex.Lock()
+
+		// Set the deadline (timeout) for reading the next incoming message
+		//websocketClient.Conn.SetReadDeadline(time.Now().Add(pongWait)) // TODO: Since this is pong specific, we shouldn't use it here, but create a const time for statusWait instead?
+
+		// Set the deadline (timeout) for the next sent message
+		websocketClient.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+
+		// Send the status request message
 		websocketClient.SendText(`{ "Message": "status", "Identifier": 0, "Type": "Generic" }`)
+
+		// Unlock the write mutex
+		writeMutex.Unlock()
 
 		// Sleep for a bit before requesting the status (Discord API only allows the presence to be updated every 15 seconds)
 		time.Sleep(15 * time.Second)
@@ -560,4 +639,36 @@ func incrementFieldForSteamID(database *database.Database, field string, steamID
 	}
 
 	return nil
+}
+
+func startPinging() {
+	//log.Println("Creating PING ticker..")
+	ticker := time.NewTicker(pingPeriod)
+	defer func() {
+		log.Println("NOTICE: Stopping PING ticker..")
+		ticker.Stop()
+	}()
+	for {
+		if isShuttingDown {
+			return
+		}
+
+		select {
+		case <-ticker.C:
+			// Send PING
+			writeMutex.Lock()
+			websocketClient.Conn.SetReadDeadline(time.Now().Add(pongWait)) // TODO: This might break things, or simply be unnecessary
+			websocketClient.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := websocketClient.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				log.Println("NOTICE: Failed to send PING to server ->", err)
+
+				// Remember to unblock, just in case
+				writeMutex.Unlock()
+
+				// Return so the ticker is stopped
+				return
+			}
+			writeMutex.Unlock()
+		}
+	}
 }
