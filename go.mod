@@ -12,5 +12,5 @@ require (
 	github.com/sacOO7/gowebsocket v0.0.0-20180719182212-1436bb906a4e
 	github.com/stretchr/objx v0.1.1 // indirect
 	github.com/stretchr/testify v1.3.0 // indirect
-	golang.org/x/crypto v0.0.0-20190131182504-b8fe1690c613 // indirect
+	golang.org/x/crypto v0.0.0-20190208162236-193df9c0f06f // indirect
 )

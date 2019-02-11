@@ -33,6 +33,9 @@ coverage.txt
 .env-*
 .env/
 
+# Logs
+rustbot.log
+
 # Docker
 .docker/
 

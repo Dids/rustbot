@@ -2,9 +2,9 @@ package database
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 
+	"github.com/Dids/rustbot/logger"
 	"github.com/HouzuoGuo/tiedot/db"
 )
 
@@ -17,11 +17,17 @@ const DatabasePath = ".db"
 type Database struct {
 	Client *db.DB
 	Path   string
+
+	// Private properties
+	logger *logger.Logger
 }
 
 // NewDatabase creates and returns a new instance of Database
 func NewDatabase() (*Database, error) {
 	database := &Database{}
+
+	// Store a reference to the Logger
+	database.logger = logger.GetLogger()
 
 	// Get the database path
 	dbPath, err := getDatabasePath()
@@ -35,7 +41,7 @@ func NewDatabase() (*Database, error) {
 
 // Open the database
 func (database *Database) Open() error {
-	log.Println("Opening database:", database.Path)
+	database.logger.Info("Opening database:", database.Path)
 
 	// Open the database (creates a new one if it doesn't yet exist)
 	newDB, err := db.OpenDB(database.Path)
@@ -49,7 +55,7 @@ func (database *Database) Open() error {
 
 // Close the database
 func (database *Database) Close() error {
-	log.Println("Closing the database..")
+	database.logger.Info("Closing the database..")
 	return database.Client.Close()
 }
 

@@ -2,13 +2,13 @@ package discord
 
 import (
 	"errors"
-	"log"
 	"os"
 	"regexp"
 	"strings"
 
 	"github.com/Dids/rustbot/database"
 	"github.com/Dids/rustbot/eventhandler"
+	"github.com/Dids/rustbot/logger"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -25,11 +25,17 @@ type Discord struct {
 	WebrconMessageHandler chan eventhandler.Message
 	HasPresence           bool
 	IsReady               bool
+
+	// Private properties
+	logger *logger.Logger
 }
 
 // NewDiscord creates and returns a new instance of Discord
 func NewDiscord(handler *eventhandler.EventHandler, db *database.Database) (*Discord, error) {
 	discord := &Discord{}
+
+	// Store a reference to the Logger
+	discord.logger = logger.GetLogger()
 
 	// Initialize the Discord client
 	if discordClient, discordClientErr := discordgo.New("Bot " + os.Getenv("DISCORD_BOT_TOKEN")); discordClientErr == nil {
@@ -63,39 +69,41 @@ func NewDiscord(handler *eventhandler.EventHandler, db *database.Database) (*Dis
 
 // Open will start the Discord client and connect to the API
 func (discord *Discord) Open() error {
+	discord.logger.Info("Opening Discord..")
 	return discord.Client.Open()
 }
 
 // Close will gracefully shutdown and cleanup the Discord client
 func (discord *Discord) Close() error {
+	discord.logger.Info("Closing Discord..")
 	discord.EventHandler.RemoveListener("receive_webrcon_message", discord.WebrconMessageHandler)
 	return discord.Client.Close()
 }
 
 func (discord *Discord) handleConnect(session *discordgo.Session, event *discordgo.Connect) {
-	log.Println("NOTICE: Discord event: connect")
+	discord.logger.Trace("Discord event: connect")
 	discord.IsReady = true
 }
 
 func (discord *Discord) handleDisconnect(session *discordgo.Session, event *discordgo.Disconnect) {
-	log.Println("NOTICE: Discord event: disconnect")
+	discord.logger.Trace("Discord event: disconnect")
 	discord.IsReady = false
 
 	// FIXME: We need to be able to reconnect, or at the very least exit the process, so we can at least recover that way
 
 	// Notify the primary process to shut down
-	log.Println("NOTICE: Shutting down!")
+	discord.logger.Trace("Shutting down!")
 	process, _ := os.FindProcess(os.Getpid())
 	process.Signal(os.Interrupt)
 	return
 }
 
 func (discord *Discord) handleRateLimit(session *discordgo.Session, event *discordgo.RateLimit) {
-	log.Println("NOTICE: Discord event: ratelimit")
+	discord.logger.Trace("Discord event: ratelimit")
 }
 
 func (discord *Discord) handleReady(session *discordgo.Session, event *discordgo.Ready) {
-	log.Println("NOTICE: Discord event: ready")
+	discord.logger.Trace("Discord event: ready")
 	discord.IsReady = true
 }
 
@@ -108,13 +116,13 @@ func (discord *Discord) handleMessageCreate(session *discordgo.Session, message 
 	// Find the channel that the message originated from
 	channel, channelErr := session.State.Channel(message.ChannelID)
 	if channelErr != nil {
-		log.Println("WARNING: Could not find channel with ID", message.ChannelID)
+		discord.logger.Warning("Could not find channel with ID", message.ChannelID)
 		return
 	}
 
 	// Only process messages from specific channels
-	if channel.ID != os.Getenv("DISCORD_BOT_CHANNEL_ID") {
-		log.Println("NOTICE: Ignoring message from channel:", "#"+channel.Name)
+	if channel.ID != os.Getenv("DISCORD_CHAT_CHANNEL_ID") {
+		discord.logger.Trace("Ignoring message from channel:", "#"+channel.Name)
 		return
 	}
 
@@ -123,18 +131,18 @@ func (discord *Discord) handleMessageCreate(session *discordgo.Session, message 
 }
 
 func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Message) {
-	// log.Println("handleIncomingWebrconMessage:", message)
+	discord.logger.Trace("handleIncomingWebrconMessage:", message)
 
 	// Format any potential mentions
 	mentionRegexMatches := mentionRegex.FindAllStringSubmatch(message.Message, -1)
 	if len(mentionRegexMatches) > 0 {
 		// Get the bot channel
-		if botChannel, botChannelErr := discord.Client.Channel(os.Getenv("DISCORD_BOT_CHANNEL_ID")); botChannelErr != nil {
-			log.Println("NOTICE: Failed to find bot channel:", botChannelErr)
+		if botChannel, botChannelErr := discord.Client.Channel(os.Getenv("DISCORD_CHAT_CHANNEL_ID")); botChannelErr != nil {
+			discord.logger.Warning("Failed to find bot channel:", botChannelErr)
 		} else {
 			// Get the bot guild from the channel
 			if botGuild, botGuildErr := discord.Client.Guild(botChannel.GuildID); botGuildErr != nil {
-				log.Println("NOTICE: Failed to find bot guild:", botGuildErr)
+				discord.logger.Warning("Failed to find bot guild:", botGuildErr)
 			} else {
 				for _, match := range mentionRegexMatches {
 
@@ -150,7 +158,7 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 						if username == mentionUsername {
 							replacer := newCaseInsensitiveReplacer(`@`+username, `<@!`+member.User.ID+`>`)
 							formattedMentionMessage := replacer.Replace(message.Message)
-							// log.Println("Formatted mention message:", formattedMentionMessage)
+							// discord.logger.Trace("Formatted mention message:", formattedMentionMessage)
 							message.Message = formattedMentionMessage
 
 							break
@@ -164,50 +172,64 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 	// TODO: Also replace the word "ylläpitäjä", "admin" and "admini" with "@Dids", so I get pinged? This should be configurable though..
 
 	// Escape both "message.User" and "message.Message" to combat potential Markdown abuse
-	//log.Println("Escaping message:", message)
+	//discord.logger.Trace("Escaping message:", message)
 	message = escapeMessage(message)
-	//log.Println("Escaped message:", message)
+	//discord.logger.Trace("Escaped message:", message)
 
 	// Handle status messages
 	if message.Type == eventhandler.StatusType {
 		// Update presence
-		// log.Println("Received status message, updating presence:", message.Message)
+		discord.logger.Trace("Received status message, updating presence:", message.Message)
 		if err := discord.updateNickname(message.User); err != nil {
-			log.Println("ERROR:", err)
+			discord.logger.Error("Failed to update nickname:", err)
 		}
 		if err := discord.updatePresence(message.Message); err != nil {
-			log.Println("ERROR:", err)
+			discord.logger.Error("Failed to update presence:", err)
 		}
 		return
 		// Handle server connect/disconnect messages
 	} else if message.Type == eventhandler.ServerConnectedType || message.Type == eventhandler.ServerDisconnectedType {
-		if _, err := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_BOT_CHANNEL_ID"), "`"+message.Message+"`"); err != nil {
-			log.Println("ERROR: Failed to send message to Discord:", message, err)
+		if _, err := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_CHAT_CHANNEL_ID"), "`"+message.Message+"`"); err != nil {
+			discord.logger.Error("Failed to send message:", message, "with error:", err)
 		}
 		return
 	} else if message.Type == eventhandler.PvPKillType || message.Type == eventhandler.OtherKillType {
 		// Ignore PvP deaths if disabled
-		if os.Getenv("KILLFEED_PVP_ENABLED") != "true" && message.Type == eventhandler.PvPKillType {
-			// log.Println("Ignoring PvP kill, feed is disabled", os.Getenv("KILLFEED_PVP_ENABLED"))
+		if os.Getenv("DISCORD_KILLFEED_PVP_ENABLED") != "true" && message.Type == eventhandler.PvPKillType {
+			// discord.logger.Trace("Ignoring PvP kill, feed is disabled", os.Getenv("DISCORD_KILLFEED_PVP_ENABLED"))
 			return
 		}
 
 		// Ignore Other deaths if disabled
-		if os.Getenv("KILLFEED_OTHER_ENABLED") != "true" && message.Type == eventhandler.OtherKillType {
-			// log.Println("Ignoring other kill, feed is disabled", os.Getenv("KILLFEED_OTHER_ENABLED"))
+		if os.Getenv("DISCORD_KILLFEED_OTHER_ENABLED") != "true" && message.Type == eventhandler.OtherKillType {
+			// discord.logger.Trace("Ignoring other kill, feed is disabled", os.Getenv("DISCORD_KILLFEED_OTHER_ENABLED"))
 			return
 		}
 
 		// Send deaths to the main channel by default
-		channelID := os.Getenv("DISCORD_BOT_CHANNEL_ID")
+		channelID := os.Getenv("DISCORD_CHAT_CHANNEL_ID")
 
 		// If the "kill feed" channel is set, override the channel
-		if len(os.Getenv("KILLFEED_CHANNEL_ID")) > 0 {
-			channelID = os.Getenv("KILLFEED_CHANNEL_ID")
+		if len(os.Getenv("DISCORD_KILLFEED_CHANNEL_ID")) > 0 {
+			channelID = os.Getenv("DISCORD_KILLFEED_CHANNEL_ID")
 		}
 
 		if _, err := discord.Client.ChannelMessageSend(channelID, "_"+message.Message+"_"); err != nil {
-			log.Println("ERROR: Failed to send message to Discord:", message, err)
+			discord.logger.Error("Failed to send message:", message, "with error:", err)
+		}
+
+		return
+	} else if message.Type == eventhandler.JoinType || message.Type == eventhandler.DisconnectType {
+		// Send join/leave messages to the main channel by default
+		channelID := os.Getenv("DISCORD_CHAT_CHANNEL_ID")
+
+		// If the "notifications" channel is set, override the channel
+		if len(os.Getenv("DISCORD_NOTIFICATIONS_CHANNEL_ID")) > 0 {
+			channelID = os.Getenv("DISCORD_NOTIFICATIONS_CHANNEL_ID")
+		}
+
+		if _, err := discord.Client.ChannelMessageSend(channelID, "_"+message.User+" "+string(message.Message)+"_"); err != nil {
+			discord.logger.Error("Failed to send message:", message, "with error:", err)
 		}
 
 		return
@@ -218,8 +240,8 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 	if message.Type == eventhandler.JoinType || message.Type == eventhandler.DisconnectType {
 		channelMessage = "_" + message.User + " " + string(message.Message) + "_"
 	}
-	if _, channelSendMessageErr := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_BOT_CHANNEL_ID"), channelMessage); channelSendMessageErr != nil {
-		log.Println("ERROR: Failed to send message to Discord:", message, channelSendMessageErr)
+	if _, err := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_CHAT_CHANNEL_ID"), channelMessage); err != nil {
+		discord.logger.Error("Failed to send message:", message, "with error:", err)
 	}
 }
 
@@ -231,7 +253,7 @@ func (discord *Discord) updateNickname(nickname string) error {
 	// Set the nickname
 	if discord.Client != nil && discord.Client.DataReady && nickname != "" {
 		// Get the bot channel
-		botChannel, botChannelErr := discord.Client.Channel(os.Getenv("DISCORD_BOT_CHANNEL_ID"))
+		botChannel, botChannelErr := discord.Client.Channel(os.Getenv("DISCORD_CHAT_CHANNEL_ID"))
 		if botChannelErr != nil {
 			return botChannelErr
 		}
@@ -246,7 +268,7 @@ func (discord *Discord) updateNickname(nickname string) error {
 		if updateNicknameErr != nil {
 			return updateNicknameErr
 		}
-		// log.Println("Successfully updated the nickname:", string(updateNicknameResponse))
+		// discord.logger.Trace("Successfully updated the nickname:", string(updateNicknameResponse))
 	} else {
 		if discord.Client == nil {
 			return errors.New("Can't update nickname, Discord client is nil (discord.Client = nil)")
