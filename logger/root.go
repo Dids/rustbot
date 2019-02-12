@@ -187,5 +187,7 @@ func (logger *Logger) logEvent(messageType eventhandler.MessageType, message ...
 	}
 
 	// Emit the constructed message string through the event handler
-	logger.EventHandler.Emit(eventhandler.Message{Event: "receive_logger_message", Message: parsedMessage, Type: messageType})
+	if logger.EventHandler != nil {
+		logger.EventHandler.Emit(eventhandler.Message{Event: "receive_logger_message", Message: parsedMessage, Type: messageType})
+	}
 }
