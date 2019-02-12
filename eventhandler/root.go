@@ -26,6 +26,16 @@ const (
 	ServerConnectedType MessageType = "ServerConnected"
 	// ServerDisconnectedType is a message type
 	ServerDisconnectedType MessageType = "ServerDisconnected"
+	// TraceLogType is a message type
+	TraceLogType MessageType = "TraceLog"
+	// InfoLogType is a message type
+	InfoLogType MessageType = "InfoLog"
+	// WarningLogType is a message type
+	WarningLogType MessageType = "WarningLog"
+	// ErrorLogType is a message type
+	ErrorLogType MessageType = "ErrorLog"
+	// PanicLogType is a message type
+	PanicLogType MessageType = "PanicLog"
 )
 
 // Message is used for emitting data through the EventHandler

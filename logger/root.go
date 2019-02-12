@@ -1,10 +1,12 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/Dids/rustbot/eventhandler"
 )
@@ -113,12 +115,14 @@ func NewLogger(options Options, handler *eventhandler.EventHandler) *Logger {
 	return instance
 }
 
-// TODO: Hook up to the EventHandler, so Discord can more easily detect new messages and send them to Discord
-
 // Trace log level message
 func (logger *Logger) Trace(message ...interface{}) {
 	// Only log if log level is below or equal to Trace
 	if logger.Options.Level <= Trace {
+		// Relay message to our event handler
+		logger.logEvent(eventhandler.TraceLogType, message...)
+
+		// Log the message
 		logger.traceLog.Println(message...)
 	}
 }
@@ -127,6 +131,10 @@ func (logger *Logger) Trace(message ...interface{}) {
 func (logger *Logger) Info(message ...interface{}) {
 	// Only log if log level is below or equal to Info
 	if logger.Options.Level <= Info {
+		// Relay message to our event handler
+		logger.logEvent(eventhandler.InfoLogType, message...)
+
+		// Log the message
 		logger.infoLog.Println(message...)
 	}
 }
@@ -135,6 +143,10 @@ func (logger *Logger) Info(message ...interface{}) {
 func (logger *Logger) Warning(message ...interface{}) {
 	// Only log if log level is below or equal to Warning
 	if logger.Options.Level <= Warning {
+		// Relay message to our event handler
+		logger.logEvent(eventhandler.WarningLogType, message...)
+
+		// Log the message
 		logger.warningLog.Println(message...)
 	}
 }
@@ -143,11 +155,37 @@ func (logger *Logger) Warning(message ...interface{}) {
 func (logger *Logger) Error(message ...interface{}) {
 	// Only log if log level is below or equal to Error
 	if logger.Options.Level <= Error {
+		// Relay message to our event handler
+		logger.logEvent(eventhandler.ErrorLogType, message...)
+
+		// Log the message
 		logger.errorLog.Println(message...)
 	}
 }
 
 // Panic prints the message in the error log and exits/panics
 func (logger *Logger) Panic(message ...interface{}) {
+	// Relay message to our event handler
+	logger.logEvent(eventhandler.PanicLogType, message...)
+
+	// Delay execution, so our event handler has time to relay the panic message
+	time.Sleep(5 * time.Second)
+
+	// Log the message and exit
 	logger.errorLog.Panic(message...)
+}
+
+func (logger *Logger) logEvent(messageType eventhandler.MessageType, message ...interface{}) {
+	// Create a single string from each message element
+	parsedMessage := ""
+	for _, value := range message {
+		if len(parsedMessage) > 0 {
+			parsedMessage = fmt.Sprintf("%s %s", parsedMessage, value)
+		} else {
+			parsedMessage = fmt.Sprintf("%s", value)
+		}
+	}
+
+	// Emit the constructed message string through the event handler
+	logger.EventHandler.Emit(eventhandler.Message{Event: "receive_logger_message", Message: parsedMessage, Type: messageType})
 }
