@@ -78,7 +78,7 @@ func (webrcon *Webrcon) handleTextMessage(message string, socket gowebsocket.Soc
 					// Template for converting status message to a JSON string
 					playerListTemplate := []byte(`{ "steamid": "$SteamID", "username": "$Username", "ping": $Ping, "connected": "$Connected", "ip": "$IP", "port": $Port, "violations": $Violations, "kicks": $Kicks }`)
 					playerListResult := []byte{}
-					playerListResults := make([]*PlayerPacket, len(playerListRegexMatches)-4)
+					playerListResults := make([]*PlayerPacket, len(playerListRegexMatches)-2 /*-4*/) // FIXME: This random "-4" here is causing issues (-2 would make more sense, right?)
 					playerListContent := []byte(message)
 
 					// For each match of the regex in the content
@@ -86,6 +86,12 @@ func (webrcon *Webrcon) handleTextMessage(message string, socket gowebsocket.Soc
 						// Apply the captured submatches to the template and append the output to the result
 						result := playerListRegex.Expand(playerListResult, playerListTemplate, playerListContent, submatches)
 						// webrcon.logger.Trace("Parsing new player:\n", string(result))
+						// webrcon.logger.Trace(index, "/", len(playerListResults))
+
+						if index >= len(playerListResults) {
+							webrcon.logger.Error("Failed to parse player list message, index out of bounds")
+							continue
+						}
 
 						// Convert the resulting JSON string to a list of PlayerPackets (assign to StatusPacket.Players)
 						if err := json.Unmarshal(result, &playerListResults[index]); err != nil {
