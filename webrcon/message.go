@@ -30,39 +30,81 @@ func (webrcon *Webrcon) handleTextMessage(message string, socket gowebsocket.Soc
 		return
 	}
 
-	webrcon.logger.Trace("Received message " + message)
+	// FIXME: Remove this
+	//statusMsg := `"hostname: [FIN] Suomileijona - WIPE 7/2\nversion : 2151 secure (secure mode enabled, connected to Steam3)\nmap     : Procedural Map\nplayers : 5 (64 max) (0 queued) (0 joining)\n\nid                name                   ping connected addr                 owner violation kicks \n76561198026306491 \"NinjaMaster\"          26   58847.23s 85.76.8.230:64178          0.0       0     \n76561198162745820 \"seavaniasa\"           12   10660.97s 82.131.23.78:55801         0.0       0     \n76561198869648658 \"finjuhis90\"           19   7122.821s 80.186.198.13:53724        0.0       0     \n76561198079774759 \"Tepachu\"              5    5168.375s 84.248.190.164:55199       0.0       0     \n76561198833784648 \"John from the office\" 26   4493.813s 85.76.50.127:45012         0.0       0     \n"`
+	//message = `{ "message": ` + statusMsg + `, "Identifier": 0, "Type": "Generic", "Stacktrace": "" }`
+
+	// webrcon.logger.Trace("Received message " + message)
 
 	// Parse the incoming message as a webrcon packet
 	packet := Packet{}
 	if parseErr := json.Unmarshal([]byte(message), &packet); parseErr != nil {
 		webrcon.logger.Error("Failed to parse as generic message:", message, parseErr)
 	}
-	//webrcon.logger.Trace("Parsed message as packet:", packet)
+	webrcon.logger.Trace("Parsed message as packet:", packet)
 
 	if packet.Identifier == GenericIdentifier && packet.Type == GenericType {
 		// Check if this is a valid status message
 		statusRegexMatches := statusRegex.FindStringSubmatch(message)
 		if len(statusRegexMatches) > 0 {
+			// FIXME: It would be ideal if we could also parse the "player list" straight to the status/template
 			// Template for converting status message to a JSON string
 			statusTemplate := []byte(`{ "hostname": "$hostname", "version": $version, "secure": "$secure", "map": "$map", "players_current": $players_current, "players_max": $players_max, "players_queued": $players_queued, "players_joining": $players_joining }`)
-			result := []byte{}
-			content := []byte(message)
+			statusResult := []byte{}
+			statusContent := []byte(message)
 
 			// TODO: Isn't this sort of redundant, since we'll never have more than 1 match anyway?
 			// For each match of the regex in the content
-			for _, submatches := range statusRegex.FindAllSubmatchIndex(content, -1) {
+			for _, submatches := range statusRegex.FindAllSubmatchIndex(statusContent, -1) {
 				// Apply the captured submatches to the template and append the output to the result
-				// webrcon.logger.Trace("Result (before):", string(result))
-				result = statusRegex.Expand(result, statusTemplate, content, submatches)
-				// webrcon.logger.Trace("Result (after):", string(result))
+				// webrcon.logger.Trace("Result (before):\n", string(statusResult))
+				statusResult = statusRegex.Expand(statusResult, statusTemplate, statusContent, submatches)
+				// webrcon.logger.Trace("Result (after):\n", string(statusResult))
 			}
-			// webrcon.logger.Trace("End result:", string(result))
+			// webrcon.logger.Trace("End result:\n", string(statusResult))
 
 			// Convert the resulting JSON string to a StatusPacket
-			if err := json.Unmarshal(result, &Status); err != nil {
+			if err := json.Unmarshal(statusResult, &Status); err != nil {
 				webrcon.logger.Error("Failed to parse status message:", err)
 			} else {
 				// webrcon.logger.Trace("Received new status:", Status)
+
+				// Parse the players from the status packet
+				playerListRegexMatches := playerListRegex.FindStringSubmatch(message)
+				if len(playerListRegexMatches)-4 > 0 {
+					// webrcon.logger.Trace("Matches:", len(playerListRegexMatches))
+					// webrcon.logger.Trace("Parsing player list..")
+
+					// Template for converting status message to a JSON string
+					playerListTemplate := []byte(`{ "steamid": "$SteamID", "username": "$Username", "ping": $Ping, "connected": "$Connected", "ip": "$IP", "port": $Port, "violations": $Violations, "kicks": $Kicks }`)
+					playerListResult := []byte{}
+					playerListResults := make([]*PlayerPacket, len(playerListRegexMatches)-4)
+					playerListContent := []byte(message)
+
+					// For each match of the regex in the content
+					for index, submatches := range playerListRegex.FindAllSubmatchIndex(playerListContent, -1) {
+						// Apply the captured submatches to the template and append the output to the result
+						result := playerListRegex.Expand(playerListResult, playerListTemplate, playerListContent, submatches)
+						// webrcon.logger.Trace("Parsing new player:\n", string(result))
+
+						// Convert the resulting JSON string to a list of PlayerPackets (assign to StatusPacket.Players)
+						if err := json.Unmarshal(result, &playerListResults[index]); err != nil {
+							webrcon.logger.Error("Failed to parse player list message:", err)
+						}
+					}
+
+					// Store the new player list in Status
+					Status.Players = playerListResults
+
+					// TODO: Format the player list before sending it?
+					playersString, err := json.Marshal(playerListResults)
+					if err != nil {
+						webrcon.logger.Error("Failed to convert player list back to JSON:", err)
+					} else {
+						// Emit the player list change to the event handler
+						webrcon.EventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: Status.Hostname, Message: string(playersString), Type: eventhandler.PlayersType})
+					}
+				}
 
 				// Handle message formatting depending on how many players there are
 				suffix := ""
@@ -77,6 +119,7 @@ func (webrcon *Webrcon) handleTextMessage(message string, socket gowebsocket.Soc
 				message := strconv.Itoa(Status.CurrentPlayers) + "/" + strconv.Itoa(Status.MaxPlayers) + suffix
 				// webrcon.logger.Trace("Status updated, emitting status message:", message)
 				webrcon.EventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: Status.Hostname, Message: message, Type: eventhandler.StatusType})
+
 				return
 			}
 		}

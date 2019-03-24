@@ -1,12 +1,14 @@
 package discord
 
 import (
+	"encoding/json"
 	"log"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/Dids/rustbot/eventhandler"
+	"github.com/Dids/rustbot/webrcon"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -148,6 +150,17 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 		}
 		return
 		// Handle server connect/disconnect messages
+	} else if message.Type == eventhandler.PlayersType {
+		// TODO: Update player list
+		discord.logger.Trace("Received players message, updating players:", message.Message)
+		parsedPlayers := make([]webrcon.PlayerPacket, 0)
+		if err := json.Unmarshal([]byte(message.Message), &parsedPlayers); err != nil {
+			discord.logger.Error("Failed to parse players:", err)
+		}
+		if err := discord.updatePlayers(parsedPlayers); err != nil {
+			discord.logger.Error("Failed to update players:", err)
+		}
+		return
 	} else if message.Type == eventhandler.ServerConnectedType || message.Type == eventhandler.ServerDisconnectedType {
 		if _, err := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_CHAT_CHANNEL_ID"), "`"+message.Message+"`"); err != nil {
 			discord.logger.Error("Failed to send message:", message, "with error:", err)

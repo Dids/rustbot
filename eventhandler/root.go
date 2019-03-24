@@ -22,6 +22,8 @@ const (
 	PvPKillType MessageType = "PvP"
 	// StatusType is a message type
 	StatusType MessageType = "Status"
+	// PlayersType is a message type
+	PlayersType MessageType = "Players"
 	// ServerConnectedType is a message type
 	ServerConnectedType MessageType = "ServerConnected"
 	// ServerDisconnectedType is a message type
