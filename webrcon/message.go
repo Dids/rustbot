@@ -89,7 +89,7 @@ func (webrcon *Webrcon) handleTextMessage(message string, socket gowebsocket.Soc
 						// webrcon.logger.Trace(index, "/", len(playerListResults))
 
 						if index >= len(playerListResults) {
-							webrcon.logger.Error("Failed to parse player list message, index out of bounds")
+							webrcon.logger.Error("Failed to parse player list message, index out of bounds") // FIXME: Why is this suddenly being called? What triggeres it? Our magic random numbers above?
 							continue
 						}
 

@@ -2,8 +2,14 @@ package discord
 
 import (
 	"errors"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/Dids/rustbot/webrcon"
+	"github.com/dustin/go-humanize"
+	"github.com/jedib0t/go-pretty/table"
 )
 
 func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
@@ -11,8 +17,49 @@ func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
 		return errors.New("Can't update nickname, Discord not ready (discord.IsReady = false)")
 	}
 
-	// TODO: Actually implement updating the player list "static message"
-	discord.logger.Trace("Received players:", players)
+	// Skip if the the channel ID isn't set
+	if len(os.Getenv("DISCORD_PLAYERLIST_CHANNEL_ID")) <= 0 {
+		return nil
+	}
+
+	// Get the player list channel
+	playersChannel, err := discord.Client.Channel(os.Getenv("DISCORD_PLAYERLIST_CHANNEL_ID"))
+	if err != nil {
+		return err
+	}
+
+	// Generate the player list table string
+	playersTable := table.NewWriter()
+	playersTable.SetStyle(table.StyleLight)
+	playersTable.AppendHeader(table.Row{"Steam ID", "Username", "Ping", "Connected", "Violations", "Kicks"})
+	for _, player := range players {
+		// Skip invalid players
+		if len(player.SteamID) > 0 {
+			playerConnectedSeconds, err := strconv.ParseFloat(strings.Replace(player.Connected, "s", "", -1), 32)
+			if err != nil {
+				return err
+			}
+			playerConnectedTime := time.Now().Add(time.Duration(-playerConnectedSeconds) * time.Second)
+			playersTable.AppendRow([]interface{}{player.SteamID, player.Username, player.Ping, humanize.Time(playerConnectedTime), player.Violations, player.Kicks})
+		}
+	}
+	playersMessage := "```\n"
+	playersMessage += playersTable.Render()
+	playersMessage += "\n```"
+
+	// Check if any messages exist
+	existingMessage, err := discord.Client.ChannelMessage(playersChannel.ID, playersChannel.LastMessageID)
+	if err != nil {
+		// Create a new message if one doesn't exist
+		if _, err := discord.Client.ChannelMessageSend(playersChannel.ID, playersMessage); err != nil {
+			return err
+		}
+	} else {
+		// Update the existing message if it already exists
+		if _, err := discord.Client.ChannelMessageEdit(playersChannel.ID, existingMessage.ID, playersMessage); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

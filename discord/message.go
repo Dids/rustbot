@@ -151,7 +151,7 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 		return
 		// Handle server connect/disconnect messages
 	} else if message.Type == eventhandler.PlayersType {
-		// TODO: Update player list
+		// Update player list
 		discord.logger.Trace("Received players message, updating players:", message.Message)
 		parsedPlayers := make([]webrcon.PlayerPacket, 0)
 		if err := json.Unmarshal([]byte(message.Message), &parsedPlayers); err != nil {
@@ -205,6 +205,12 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 			discord.logger.Error("Failed to send message:", message, "with error:", err)
 		}
 
+		return
+	}
+
+	// Skip the message of the user is missing
+	if len(message.User) <= 0 {
+		discord.logger.Warning("Skipping chat message with missing username:", message)
 		return
 	}
 
