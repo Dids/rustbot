@@ -31,7 +31,7 @@ func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
 	// Generate the player list table string
 	playersTable := table.NewWriter()
 	playersTable.SetStyle(table.StyleLight)
-	playersTable.AppendHeader(table.Row{"Steam ID", "Username", "Ping", "Connected", "Violations", "Kicks"})
+	playersTable.AppendHeader(table.Row{"Username", "Ping", "Connected", "Violations", "Kicks"})
 	for _, player := range players {
 		// Skip invalid players
 		if len(player.SteamID) > 0 {
@@ -40,7 +40,7 @@ func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
 				return err
 			}
 			playerConnectedTime := time.Now().Add(time.Duration(-playerConnectedSeconds) * time.Second)
-			playersTable.AppendRow([]interface{}{player.SteamID, player.Username, player.Ping, humanize.Time(playerConnectedTime), player.Violations, player.Kicks})
+			playersTable.AppendRow([]interface{}{player.Username, player.Ping, humanize.Time(playerConnectedTime), player.Violations, player.Kicks})
 		}
 	}
 	playersMessage := "```\n"
