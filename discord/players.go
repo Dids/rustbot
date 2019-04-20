@@ -55,6 +55,14 @@ func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
 			return err
 		}
 	} else {
+		// Skip if the message didn't change
+		if existingMessage.Content == playersMessage {
+			return nil
+		}
+
+		discord.logger.Trace("existingMessage.Content:\n", existingMessage.Content)
+		discord.logger.Trace("playersMessage:\n", playersMessage)
+
 		// Update the existing message if it already exists
 		if _, err := discord.Client.ChannelMessageEdit(playersChannel.ID, existingMessage.ID, playersMessage); err != nil {
 			return err
