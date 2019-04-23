@@ -13,12 +13,15 @@ import (
 )
 
 func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
+	//discord.logger.Trace("Updating players:", players)
+
 	if !discord.IsReady {
-		return errors.New("Can't update nickname, Discord not ready (discord.IsReady = false)")
+		return errors.New("Can't update player list, Discord not ready (discord.IsReady = false)")
 	}
 
 	// Skip if the the channel ID isn't set
 	if len(os.Getenv("DISCORD_PLAYERLIST_CHANNEL_ID")) <= 0 {
+		//discord.logger.Trace("DISCORD_PLAYERLIST_CHANNEL_ID not set, skipping player list update")
 		return nil
 	}
 
@@ -33,6 +36,8 @@ func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
 	playersTable.SetStyle(table.StyleLight)
 	playersTable.AppendHeader(table.Row{"Username", "Ping", "Connected", "Violations", "Kicks"})
 	for _, player := range players {
+		//discord.logger.Trace("Parsing player:", player)
+
 		// Skip invalid players
 		if len(player.SteamID) > 0 {
 			playerConnectedSeconds, err := strconv.ParseFloat(strings.Replace(player.Connected, "s", "", -1), 32)
@@ -60,8 +65,8 @@ func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
 			return nil
 		}
 
-		discord.logger.Trace("existingMessage.Content:\n", existingMessage.Content)
-		discord.logger.Trace("playersMessage:\n", playersMessage)
+		//discord.logger.Trace("existingMessage.Content:\n", existingMessage.Content)
+		//discord.logger.Trace("playersMessage:\n", playersMessage)
 
 		// Update the existing message if it already exists
 		if _, err := discord.Client.ChannelMessageEdit(playersChannel.ID, existingMessage.ID, playersMessage); err != nil {
