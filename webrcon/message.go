@@ -68,15 +68,15 @@ func (webrcon *Webrcon) handleTextMessage(message string, socket gowebsocket.Soc
 				webrcon.logger.Error("Failed to parse status message:", err)
 			} else {
 				//webrcon.logger.Trace("Received new status:", Status)
-				//webrcon.logger.Trace("RAW MESSAGE:\n", message)
+				webrcon.logger.Trace("RAW MESSAGE:\n", message)
 
 				// Parse the players from the status packet
 				playerListRegexMatches := playerListRegex.FindStringSubmatch(message)
 				webrcon.logger.Trace("playerListRegexMatches:", playerListRegexMatches)
 				if len(playerListRegexMatches) > 0 {
 					//if len(playerListRegexMatches)-4 > 0 {
-					//webrcon.logger.Trace("Matches:", len(playerListRegexMatches))
-					//webrcon.logger.Trace("Parsing player list..")
+					webrcon.logger.Trace("Matches:", len(playerListRegexMatches))
+					webrcon.logger.Trace("Parsing player list..")
 
 					// Template for converting status message to a JSON string
 					playerListTemplate := []byte(`{ "steamid": "$SteamID", "username": "$Username", "ping": $Ping, "connected": "$Connected", "ip": "$IP", "port": $Port, "violations": $Violations, "kicks": $Kicks }`)
@@ -88,8 +88,8 @@ func (webrcon *Webrcon) handleTextMessage(message string, socket gowebsocket.Soc
 					for index, submatches := range playerListRegex.FindAllSubmatchIndex(playerListContent, -1) {
 						// Apply the captured submatches to the template and append the output to the result
 						result := playerListRegex.Expand(playerListResult, playerListTemplate, playerListContent, submatches)
-						//webrcon.logger.Trace("Parsing new player:\n", string(result))
-						//webrcon.logger.Trace(index, "/", len(playerListResults))
+						webrcon.logger.Trace("Parsing new player:\n", string(result))
+						webrcon.logger.Trace(index, "/", len(playerListResults))
 
 						if index >= len(playerListResults) {
 							webrcon.logger.Error("Failed to parse player list message, index out of bounds") // FIXME: Why is this suddenly being called? What triggeres it? Our magic random numbers above?
