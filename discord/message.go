@@ -162,7 +162,7 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 		}
 		return
 	} else if message.Type == eventhandler.ServerConnectedType || message.Type == eventhandler.ServerDisconnectedType {
-		if _, err := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_CHAT_CHANNEL_ID"), "`"+message.Message+"`"); err != nil {
+		if _, err := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_NOTIFICATIONS_CHANNEL_ID"), "`"+message.Message+"`"); err != nil {
 			discord.logger.Error("Failed to send message:", message, "with error:", err)
 		}
 		return
