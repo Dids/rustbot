@@ -55,11 +55,8 @@ func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
 	// Check if any messages exist
 	existingMessage, err := discord.Client.ChannelMessage(playersChannel.ID, playersChannel.LastMessageID)
 	if err != nil {
-		// Create a new message if one doesn't exist
-		if _, err := discord.Client.ChannelMessageSend(playersChannel.ID, playersMessage); err != nil {
-			return err
-		}
-	} else {
+		return err
+	} else if existingMessage != nil {
 		// Skip if the message didn't change
 		if existingMessage.Content == playersMessage {
 			return nil
@@ -70,6 +67,11 @@ func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
 
 		// Update the existing message if it already exists
 		if _, err := discord.Client.ChannelMessageEdit(playersChannel.ID, existingMessage.ID, playersMessage); err != nil {
+			return err
+		}
+	} else {
+		// Create a new message if one doesn't exist
+		if _, err := discord.Client.ChannelMessageSend(playersChannel.ID, playersMessage); err != nil {
 			return err
 		}
 	}

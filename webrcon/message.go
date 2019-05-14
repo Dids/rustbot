@@ -81,7 +81,8 @@ func (webrcon *Webrcon) handleTextMessage(message string, socket gowebsocket.Soc
 					// Template for converting status message to a JSON string
 					playerListTemplate := []byte(`{ "steamid": "$SteamID", "username": "$Username", "ping": $Ping, "connected": "$Connected", "ip": "$IP", "port": $Port, "violations": $Violations, "kicks": $Kicks }`)
 					playerListResult := []byte{}
-					playerListResults := make([]*PlayerPacket, len(playerListRegexMatches)-2 /*-4*/) // FIXME: This random "-4" here is causing issues (-2 would make more sense, right?)
+					playerListResults := make([]*PlayerPacket, len(playerListRegexMatches))
+					// playerListResults := make([]*PlayerPacket, len(playerListRegexMatches)-2 /*-4*/) // FIXME: This random "-4" here is causing issues (-2 would make more sense, right?)
 					playerListContent := []byte(message)
 
 					// For each match of the regex in the content
@@ -105,7 +106,6 @@ func (webrcon *Webrcon) handleTextMessage(message string, socket gowebsocket.Soc
 					// Store the new player list in Status
 					Status.Players = playerListResults
 
-					// TODO: Format the player list before sending it?
 					playersString, err := json.Marshal(playerListResults)
 					if err != nil {
 						webrcon.logger.Error("Failed to convert player list back to JSON:", err)
@@ -113,6 +113,10 @@ func (webrcon *Webrcon) handleTextMessage(message string, socket gowebsocket.Soc
 						// Emit the player list change to the event handler
 						webrcon.EventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: Status.Hostname, Message: string(playersString), Type: eventhandler.PlayersType})
 					}
+				} else {
+					// No players online, but we still need to make sure the player list gets updated
+					Status.Players = make([]*PlayerPacket, 0)
+					webrcon.EventHandler.Emit(eventhandler.Message{Event: "receive_webrcon_message", User: Status.Hostname, Message: "[]", Type: eventhandler.PlayersType})
 				}
 
 				// Handle message formatting depending on how many players there are
