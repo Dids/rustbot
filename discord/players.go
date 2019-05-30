@@ -45,7 +45,7 @@ func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
 				return err
 			}
 			playerConnectedTime := time.Now().Add(time.Duration(-playerConnectedSeconds) * time.Second)
-			playersTable.AppendRow([]interface{}{player.Username, player.Ping, humanize.Time(playerConnectedTime), player.Violations, player.Kicks})
+			playersTable.AppendRow([]interface{}{player.Username + " ツツ", player.Ping, humanize.Time(playerConnectedTime), player.Violations, player.Kicks})
 		}
 	}
 	playersMessage := "```\n"
