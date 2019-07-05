@@ -142,7 +142,7 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 	if message.Type == eventhandler.StatusType {
 		// Update presence
 		discord.logger.Trace("Received status message, updating presence:", message.Message)
-		if err := discord.updateNickname(message.User); err != nil {
+		if err := discord.updateNickname(truncateString(message.User, 32)); err != nil {
 			discord.logger.Error("Failed to update nickname:", err)
 		}
 		if err := discord.updatePresence(message.Message); err != nil {
@@ -222,4 +222,15 @@ func (discord *Discord) handleIncomingWebrconMessage(message eventhandler.Messag
 	if _, err := discord.Client.ChannelMessageSend(os.Getenv("DISCORD_CHAT_CHANNEL_ID"), channelMessage); err != nil {
 		discord.logger.Error("Failed to send message:", message, "with error:", err)
 	}
+}
+
+func truncateString(str string, num int) string {
+	bnoden := str
+	if len(str) > num {
+		if num > 2 {
+			num -= 2
+		}
+		bnoden = str[0:num] + ".."
+	}
+	return bnoden
 }
