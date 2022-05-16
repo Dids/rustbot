@@ -31,6 +31,9 @@ func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
 		return err
 	}
 
+	// FIXME: If the player count has NOT changed and ONLY the ping has changed,
+	//        then SKIP updating the message! DO update the connected duration!
+
 	// Generate the player list table string
 	playersTable := table.NewWriter()
 	playersTable.SetStyle(table.StyleLight)
@@ -53,10 +56,8 @@ func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
 	playersMessage += "\n```"
 
 	// Check if any messages exist
-	existingMessage, err := discord.Client.ChannelMessage(playersChannel.ID, playersChannel.LastMessageID)
-	if err != nil {
-		return err
-	} else if existingMessage != nil {
+	existingMessage, _ := discord.Client.ChannelMessage(playersChannel.ID, playersChannel.LastMessageID)
+	if existingMessage != nil {
 		// Skip if the message didn't change
 		if existingMessage.Content == playersMessage {
 			return nil
@@ -67,11 +68,13 @@ func (discord *Discord) updatePlayers(players []webrcon.PlayerPacket) error {
 
 		// Update the existing message if it already exists
 		if _, err := discord.Client.ChannelMessageEdit(playersChannel.ID, existingMessage.ID, playersMessage); err != nil {
+			discord.logger.Error("Error editing existing message:", err)
 			return err
 		}
 	} else {
 		// Create a new message if one doesn't exist
 		if _, err := discord.Client.ChannelMessageSend(playersChannel.ID, playersMessage); err != nil {
+			discord.logger.Error("Error creating new message:", err)
 			return err
 		}
 	}
