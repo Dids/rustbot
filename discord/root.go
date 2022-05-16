@@ -43,6 +43,8 @@ func NewDiscord(handler *eventhandler.EventHandler, db *database.Database) (*Dis
 		return nil, discordClientErr
 	}
 
+	discord.Client.ShouldReconnectOnError = true
+
 	// Setup Discord client event handlers
 	discord.Client.AddHandler(discord.handleConnect)
 	discord.Client.AddHandler(discord.handleDisconnect)
