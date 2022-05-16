@@ -13,7 +13,11 @@ func (discord *Discord) handleConnect(session *discordgo.Session, event *discord
 
 func (discord *Discord) handleDisconnect(session *discordgo.Session, event *discordgo.Disconnect) {
 	discord.logger.Trace("Discord event: disconnect")
-	discord.IsReady = false // TODO: Test if we need to set this or not, or if discordgo keeps buffering data for us?
+
+	// TODO: If discordgo keeps buffering our messages and stuff, we would ideally NOT want to set this,
+	//       because we want our data to keep flowing, even if it's buffered and going in/out "late"!
+
+	// discord.IsReady = false // TODO: Test if we need to set this or not, or if discordgo keeps buffering data for us?
 
 	// TODO: We're no longer shutting down when Discord disconnects,
 	//       as the client will keep reconnecting, so we will just keep
