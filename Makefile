@@ -1,4 +1,4 @@
-# NOTE: Only necessary with versions below 1.16
+# NOTE: Possibly only necessary with versions below 1.16?
 # export GO111MODULE=on
 
 export PATH := $(GOPATH)/bin:$(PATH)
@@ -20,12 +20,12 @@ clean:
 	rm -f $(RUSTPLUS_DIR)/rustplus.pb.go
 
 # TODO: Don't mark this a phony, but instead see if rustplus.proto has changed?
-protogen: $(RUSTPLUS_PROTO_PATH) deps
+protogen: $(RUSTPLUS_PROTO_PATH)
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 	protoc --go_out=$(RUSTPLUS_DIR) --go_opt=paths=source_relative --proto_path=$(RUSTPLUS_DIR) $(RUSTPLUS_PROTO_PATH)
 
-deps:
+deps: protogen
 	go build -v $(EXTRA_FLAGS) ./...
-	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
 build: deps
 	go build -v $(EXTRA_FLAGS) -ldflags "-X main.Version=$(BINARY_VERSION)" -o $(BINARY_OUTPUT)
