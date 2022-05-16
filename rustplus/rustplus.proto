@@ -16,8 +16,8 @@ option go_package = "github.com/Dids/rustbot/rustplus";
 package rustplus;
 
 message AppMessage {
-	optional AppResponse response = 1;
-	optional AppBroadcast broadcast = 2;
+	AppResponse response = 1;
+	AppBroadcast broadcast = 2;
 }
 
 message AppRequest {
@@ -25,20 +25,20 @@ message AppRequest {
 	uint64 playerId = 2;
 	int32 playerToken = 3;
 
-	optional uint32 entityId = 4;
-	optional AppEmpty getInfo = 8;
-	optional AppEmpty getTime = 9;
-	optional AppEmpty getMap = 10;
-	optional AppEmpty getTeamInfo = 11;
-	optional AppEmpty getTeamChat = 12;
-	optional AppSendMessage sendTeamMessage = 13;
-	optional AppEmpty getEntityInfo = 14;
-	optional AppSetEntityValue setEntityValue = 15;
-	optional AppEmpty checkSubscription = 16;
-	optional AppFlag setSubscription = 17;
-	optional AppEmpty getMapMarkers = 18;
-	optional AppCameraFrameRequest getCameraFrame = 19;
-	optional AppPromoteToLeader promoteToLeader = 20;
+	uint32 entityId = 4;
+	AppEmpty getInfo = 8;
+	AppEmpty getTime = 9;
+	AppEmpty getMap = 10;
+	AppEmpty getTeamInfo = 11;
+	AppEmpty getTeamChat = 12;
+	AppSendMessage sendTeamMessage = 13;
+	AppEmpty getEntityInfo = 14;
+	AppSetEntityValue setEntityValue = 15;
+	AppEmpty checkSubscription = 16;
+	AppFlag setSubscription = 17;
+	AppEmpty getMapMarkers = 18;
+	AppCameraFrameRequest getCameraFrame = 19;
+	AppPromoteToLeader promoteToLeader = 20;
 }
 
 message AppSendMessage {
@@ -60,23 +60,23 @@ message AppPromoteToLeader {
 
 message AppResponse {
 	uint32 seq = 1;
-	optional AppSuccess success = 4;
-	optional AppError error = 5;
-	optional AppInfo info = 6;
-	optional AppTime time = 7;
-	optional AppMap map = 8;
-	optional AppTeamInfo teamInfo = 9;
-	optional AppTeamChat teamChat = 10;
-	optional AppEntityInfo entityInfo = 11;
-	optional AppFlag flag = 12;
-	optional AppMapMarkers mapMarkers = 13;
-	optional AppCameraFrame cameraFrame = 14;
+	AppSuccess success = 4;
+	AppError error = 5;
+	AppInfo info = 6;
+	AppTime time = 7;
+	AppMap map = 8;
+	AppTeamInfo teamInfo = 9;
+	AppTeamChat teamChat = 10;
+	AppEntityInfo entityInfo = 11;
+	AppFlag flag = 12;
+	AppMapMarkers mapMarkers = 13;
+	AppCameraFrame cameraFrame = 14;
 }
 
 message AppBroadcast {
-	optional AppTeamChanged teamChanged = 4;
-	optional AppTeamMessage teamMessage = 5;
-	optional AppEntityChanged entityChanged = 6;
+	AppTeamChanged teamChanged = 4;
+	AppTeamMessage teamMessage = 5;
+	AppEntityChanged entityChanged = 6;
 }
 
 message AppEmpty {
@@ -101,8 +101,8 @@ message AppInfo {
 	uint32 players = 7;
 	uint32 maxPlayers = 8;
 	uint32 queuedPlayers = 9;
-	optional uint32 seed = 10;
-	optional uint32 salt = 11;
+	uint32 seed = 10;
+	uint32 salt = 11;
 }
 
 message AppTime {
@@ -119,7 +119,7 @@ message AppMap {
 	bytes jpgImage = 3;
 	int32 oceanMargin = 4;
 	repeated AppMap.Monument monuments = 5;
-	optional string background = 6;
+	string background = 6;
 
 	message Monument {
 		string token = 1;
@@ -177,11 +177,11 @@ enum AppEntityType {
 }
 
 message AppEntityPayload {
-	optional bool value = 1;
+	bool value = 1;
 	repeated AppEntityPayload.Item items = 2;
-	optional int32 capacity = 3;
-	optional bool hasProtection = 4;
-	optional uint32 protectionExpiry = 5;
+	int32 capacity = 3;
+	bool hasProtection = 4;
+	uint32 protectionExpiry = 5;
 
 	message Item {
 		int32 itemId = 1;
@@ -199,10 +199,10 @@ message AppMapMarkers {
 }
 
 message Vector4 {
-	optional float x = 1;
-	optional float y = 2;
-	optional float z = 3;
-	optional float w = 4;
+	float x = 1;
+	float y = 2;
+	float z = 3;
+	float w = 4;
 }
 
 message AppMarker {
@@ -211,13 +211,13 @@ message AppMarker {
 	AppMarkerType type = 2;
 	float x = 3;
 	float y = 4;
-	optional uint64 steamId = 5;
-	optional float rotation = 6;
-	optional float radius = 7;
-	optional Vector4 color1 = 8;
-	optional Vector4 color2 = 9;
-	optional float alpha = 10;
-	optional string name = 11;
+	uint64 steamId = 5;
+	float rotation = 6;
+	float radius = 7;
+	Vector4 color1 = 8;
+	Vector4 color2 = 9;
+	float alpha = 10;
+	string name = 11;
 	repeated AppMarker.SellOrder sellOrders = 13;
 
 	message SellOrder {

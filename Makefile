@@ -20,10 +20,10 @@ clean:
 	rm -f $(RUSTPLUS_DIR)/rustplus.pb.go
 
 # TODO: Don't mark this a phony, but instead see if rustplus.proto has changed?
-protogen: $(RUSTPLUS_PROTO_PATH)
+protogen: $(RUSTPLUS_PROTO_PATH) deps
 	protoc --go_out=$(RUSTPLUS_DIR) --go_opt=paths=source_relative --proto_path=$(RUSTPLUS_DIR) $(RUSTPLUS_PROTO_PATH)
 
-deps: protogen
+deps:
 	go build -v $(EXTRA_FLAGS) ./...
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
