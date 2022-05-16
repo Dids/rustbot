@@ -7,33 +7,38 @@ BINARY_VERSION?=0.0.1
 BINARY_OUTPUT?=rustbot
 EXTRA_FLAGS?=-mod=vendor
 
+RUSTPLUS_DIR?=$(CURDIR)/rustplus
+RUSTPLUS_PROTO_PATH?=$(RUSTPLUS_DIR)/rustplus.proto
+
 .PHONY: all install build test clean deps upgrade
 
-all: deps build
-
-install:
-	go install -v $(EXTRA_FLAGS) -ldflags "-X main.Version=$(BINARY_VERSION)"
-
-build:
-	go build -v $(EXTRA_FLAGS) -ldflags "-X main.Version=$(BINARY_VERSION)" -o $(BINARY_OUTPUT)
-
-test:
-	go test -v $(EXTRA_FLAGS) -race -coverprofile=coverage.txt -covermode=atomic ./...
+all: clean deps build
 
 clean:
 	go clean
 	rm -f $(BINARY_NAME)
+	rm -f $(RUSTPLUS_DIR)/rustplus.pb.go
 
-deps:
+# TODO: Don't mark this a phony, but instead see if rustplus.proto has changed?
+protogen: $(RUSTPLUS_PROTO_PATH)
+	protoc --go_out=$(RUSTPLUS_DIR) --go_opt=paths=source_relative --proto_path=$(RUSTPLUS_DIR) $(RUSTPLUS_PROTO_PATH)
+
+deps: protogen
 	go build -v $(EXTRA_FLAGS) ./...
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
-tidy:
-	go mod tidy
+build: deps
+	go build -v $(EXTRA_FLAGS) -ldflags "-X main.Version=$(BINARY_VERSION)" -o $(BINARY_OUTPUT)
 
-upgrade:
+test: build
+	go test -v $(EXTRA_FLAGS) -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+install: build
+	go install -v $(EXTRA_FLAGS) -ldflags "-X main.Version=$(BINARY_VERSION)"
+
+upgrade: deps
 	go get -u ./...
 	go mod vendor
 
-protogen:
-	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-	protoc --go_out=$(CURDIR)/rustplus --go_opt=paths=source_relative --proto_path=$(CURDIR)/rustplus $(CURDIR)/rustplus/rustplus.proto
+tidy: deps
+	go mod tidy

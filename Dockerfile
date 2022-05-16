@@ -1,15 +1,13 @@
 # Compiler image
-FROM didstopia/base:go-alpine-3.5 AS go-builder
+FROM didstopia/base:go-alpine-3.14 AS go-builder
 
 # Copy the project 
 COPY . /tmp/rustbot/
 WORKDIR /tmp/rustbot/
 
-## TODO: Install "protobuf" or "protobuf-compiler"
-## TODO: (Re-)generate the protobuf files
-
 # Install dependencies
-RUN make deps
+RUN apk add --no-cache protobuf && \
+    make deps
 
 # Build the binary
 #RUN make build && ls /tmp/rustbot
