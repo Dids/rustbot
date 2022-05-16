@@ -18,7 +18,9 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       # TODO: Set "GO111MODULE=on" for versions below 1.16
-      - run: make deps build test install
+      - run: |-
+          sudo apt-get install -y --no-install-recommends protobuf-compiler
+          make deps build test install
       # TODO: Use the official action instead?
       #       https://github.com/codecov/codecov-action
       - run: bash <(curl -s https://codecov.io/bash)

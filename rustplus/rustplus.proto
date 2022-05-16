@@ -1,0 +1,264 @@
+//
+// The Rust+ implementation is based largely or entirely on the following project:
+// https://github.com/liamcottle/rustplus.js
+//
+// Original Author: liamcottle
+// Original Source: https://github.com/liamcottle/rustplus.js/blob/master/rustplus.proto
+//
+
+// TODO: Should we make this into a "go module" instead?
+
+syntax = "proto3";
+
+option go_package = "github.com/Dids/rustbot/rustplus";
+
+// package main;
+package rustplus;
+
+message AppMessage {
+	AppResponse response = 1;
+	AppBroadcast broadcast = 2;
+}
+
+message AppRequest {
+	uint32 seq = 1;
+	uint64 playerId = 2;
+	int32 playerToken = 3;
+
+	uint32 entityId = 4;
+	AppEmpty getInfo = 8;
+	AppEmpty getTime = 9;
+	AppEmpty getMap = 10;
+	AppEmpty getTeamInfo = 11;
+	AppEmpty getTeamChat = 12;
+	AppSendMessage sendTeamMessage = 13;
+	AppEmpty getEntityInfo = 14;
+	AppSetEntityValue setEntityValue = 15;
+	AppEmpty checkSubscription = 16;
+	AppFlag setSubscription = 17;
+	AppEmpty getMapMarkers = 18;
+	AppCameraFrameRequest getCameraFrame = 19;
+	AppPromoteToLeader promoteToLeader = 20;
+}
+
+message AppSendMessage {
+	string message = 1;
+}
+
+message AppSetEntityValue {
+	bool value = 1;
+}
+
+message AppCameraFrameRequest {
+	string identifier = 1;
+	uint32 frame = 2;
+}
+
+message AppPromoteToLeader {
+	uint64 steamId = 1;
+}
+
+message AppResponse {
+	uint32 seq = 1;
+	AppSuccess success = 4;
+	AppError error = 5;
+	AppInfo info = 6;
+	AppTime time = 7;
+	AppMap map = 8;
+	AppTeamInfo teamInfo = 9;
+	AppTeamChat teamChat = 10;
+	AppEntityInfo entityInfo = 11;
+	AppFlag flag = 12;
+	AppMapMarkers mapMarkers = 13;
+	AppCameraFrame cameraFrame = 14;
+}
+
+message AppBroadcast {
+	AppTeamChanged teamChanged = 4;
+	AppTeamMessage teamMessage = 5;
+	AppEntityChanged entityChanged = 6;
+}
+
+message AppEmpty {
+
+}
+
+message AppSuccess {
+
+}
+
+message AppError {
+	string error = 1;
+}
+
+message AppInfo {
+	string name = 1;
+	string headerImage = 2;
+	string url = 3;
+	string map = 4;
+	uint32 mapSize = 5;
+	uint32 wipeTime = 6;
+	uint32 players = 7;
+	uint32 maxPlayers = 8;
+	uint32 queuedPlayers = 9;
+	uint32 seed = 10;
+	uint32 salt = 11;
+}
+
+message AppTime {
+	float dayLengthMinutes = 1;
+	float timeScale = 2;
+	float sunrise = 3;
+	float sunset = 4;
+	float time = 5;
+}
+
+message AppMap {
+	uint32 width = 1;
+	uint32 height = 2;
+	bytes jpgImage = 3;
+	int32 oceanMargin = 4;
+	repeated AppMap.Monument monuments = 5;
+	string background = 6;
+
+	message Monument {
+		string token = 1;
+		float x = 2;
+		float y = 3;
+	}
+}
+
+message AppTeamInfo {
+	uint64 leaderSteamId = 1;
+	repeated AppTeamInfo.Member members = 2;
+	repeated AppTeamInfo.Note mapNotes = 3;
+	repeated AppTeamInfo.Note leaderMapNotes = 4;
+
+	message Member {
+		uint64 steamId = 1;
+		string name = 2;
+		float x = 3;
+		float y = 4;
+		bool isOnline = 5;
+		uint32 spawnTime = 6;
+		bool isAlive = 7;
+		uint32 deathTime = 8;
+	}
+
+	message Note {
+		int32 type = 2;
+		float x = 3;
+		float y = 4;
+	}
+}
+
+message AppTeamChat {
+	repeated AppChatMessage messages = 1;
+}
+
+message AppChatMessage {
+	uint64 steamId = 1;
+	string name = 2;
+	string message = 3;
+	string color = 4;
+	uint32 time = 5;
+}
+
+message AppEntityInfo {
+	AppEntityType type = 1;
+	AppEntityPayload payload = 3;
+}
+
+enum AppEntityType {
+  UnknownEntityType = 0;
+	Switch = 1;
+	Alarm = 2;
+	StorageMonitor = 3;
+}
+
+message AppEntityPayload {
+	bool value = 1;
+	repeated AppEntityPayload.Item items = 2;
+	int32 capacity = 3;
+	bool hasProtection = 4;
+	uint32 protectionExpiry = 5;
+
+	message Item {
+		int32 itemId = 1;
+		int32 quantity = 2;
+		bool itemIsBlueprint = 3;
+	}
+}
+
+message AppFlag {
+	bool value = 1;
+}
+
+message AppMapMarkers {
+	repeated AppMarker markers = 1;
+}
+
+message Vector4 {
+	float x = 1;
+	float y = 2;
+	float z = 3;
+	float w = 4;
+}
+
+message AppMarker {
+
+	uint32 id = 1;
+	AppMarkerType type = 2;
+	float x = 3;
+	float y = 4;
+	uint64 steamId = 5;
+	float rotation = 6;
+	float radius = 7;
+	Vector4 color1 = 8;
+	Vector4 color2 = 9;
+	float alpha = 10;
+	string name = 11;
+	repeated AppMarker.SellOrder sellOrders = 13;
+
+	message SellOrder {
+		int32 itemId = 1;
+		int32 quantity = 2;
+		int32 currencyId = 3;
+		int32 costPerItem = 4;
+		int32 amountInStock = 5;
+		bool itemIsBlueprint = 6;
+		bool currencyIsBlueprint = 7;
+	}
+}
+
+enum AppMarkerType {
+  UnknownMarkerType = 0;
+	Player = 1;
+	Explosion = 2;
+	VendingMachine = 3;
+	CH47 = 4;
+	CargoShip = 5;
+	Crate = 6;
+	GenericRadius = 7;
+	PatrolHelicopter = 8;
+}
+
+message AppCameraFrame {
+	uint32 frame = 1;
+	bytes jpgImage = 2;
+}
+
+
+message AppTeamChanged {
+	uint64 playerId = 1;
+	AppTeamInfo teamInfo = 2;
+}
+
+message AppTeamMessage {
+	AppChatMessage message = 1;
+}
+
+message AppEntityChanged {
+	uint32 entityId = 1;
+	AppEntityPayload payload = 2;
+}
