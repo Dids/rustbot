@@ -1,4 +1,5 @@
-export GO111MODULE=on
+# NOTE: Only necessary with versions below 1.16
+# export GO111MODULE=on
 
 export PATH := $(GOPATH)/bin:$(PATH)
 

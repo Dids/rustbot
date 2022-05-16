@@ -50,7 +50,7 @@ func (discord *Discord) updatePresence(presence string) error {
 
 	// Set the presence
 	if discord.Client != nil && discord.Client.DataReady && presence != "" {
-		if statusErr := discord.Client.UpdateStatus(0, presence); statusErr != nil {
+		if statusErr := discord.Client.UpdateGameStatus(0, presence); statusErr != nil {
 			discord.HasPresence = false
 			return statusErr
 		}

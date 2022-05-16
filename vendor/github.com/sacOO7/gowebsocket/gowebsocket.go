@@ -9,6 +9,7 @@ import (
 	"sync"
 	"github.com/sacOO7/go-logger"
 	"reflect"
+	"time"
 )
 
 type Empty struct {
@@ -38,6 +39,7 @@ type Socket struct {
 	OnPingReceived    func(data string, socket Socket)
 	OnPongReceived    func(data string, socket Socket)
 	IsConnected       bool
+	Timeout           time.Duration
 	sendMu            *sync.Mutex // Prevent "concurrent write to websocket connection"
 	receiveMu         *sync.Mutex
 }
@@ -62,6 +64,7 @@ func New(url string) Socket {
 			UseSSL:         true,
 		},
 		WebsocketDialer: &websocket.Dialer{},
+		Timeout:         0,
 		sendMu:          &sync.Mutex{},
 		receiveMu:       &sync.Mutex{},
 	}
@@ -76,12 +79,16 @@ func (socket *Socket) setConnectionOptions() {
 
 func (socket *Socket) Connect() {
 	var err error;
+	var resp *http.Response
 	socket.setConnectionOptions()
 
-	socket.Conn, _, err = socket.WebsocketDialer.Dial(socket.Url, socket.RequestHeader)
+	socket.Conn, resp, err = socket.WebsocketDialer.Dial(socket.Url, socket.RequestHeader)
 
 	if err != nil {
 		logger.Error.Println("Error while connecting to server ", err)
+		if resp != nil {
+			logger.Error.Println("HTTP Response %d status: %s", resp.StatusCode, resp.Status)
+		}
 		socket.IsConnected = false
 		if socket.OnConnectError != nil {
 			socket.OnConnectError(err, *socket)
@@ -128,10 +135,17 @@ func (socket *Socket) Connect() {
 	go func() {
 		for {
 			socket.receiveMu.Lock()
+			if socket.Timeout != 0 {
+				socket.Conn.SetReadDeadline(time.Now().Add(socket.Timeout))
+			}
 			messageType, message, err := socket.Conn.ReadMessage()
 			socket.receiveMu.Unlock()
 			if err != nil {
 				logger.Error.Println("read:", err)
+				if socket.OnDisconnected != nil {
+					socket.IsConnected = false
+					socket.OnDisconnected(err, *socket)
+				}
 				return
 			}
 			logger.Info.Println("recv: %s", message)
