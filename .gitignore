@@ -1,3 +1,6 @@
+### Protobuf ###
+*.pb.go
+
 ### Code Coverage ###
 coverage.txt
 

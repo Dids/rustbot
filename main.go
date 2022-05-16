@@ -10,10 +10,14 @@ import (
 	"github.com/Dids/rustbot/discord"
 	"github.com/Dids/rustbot/eventhandler"
 	"github.com/Dids/rustbot/logger"
+	"github.com/Dids/rustbot/rustplus"
 	"github.com/Dids/rustbot/webrcon"
 
 	_ "github.com/joho/godotenv/autoload"
 )
+
+// TODO: Remove this after we actually start using it
+var foo rustplus.AppEntityType
 
 var eventHandler eventhandler.EventHandler
 

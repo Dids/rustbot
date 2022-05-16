@@ -5,6 +5,9 @@ FROM didstopia/base:go-alpine-3.5 AS go-builder
 COPY . /tmp/rustbot/
 WORKDIR /tmp/rustbot/
 
+## TODO: Install "protobuf" or "protobuf-compiler"
+## TODO: (Re-)generate the protobuf files
+
 # Install dependencies
 RUN make deps
 

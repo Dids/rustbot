@@ -33,3 +33,7 @@ tidy:
 upgrade:
 	go get -u ./...
 	go mod vendor
+
+protogen:
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	protoc --go_out=$(CURDIR)/rustplus --go_opt=paths=source_relative --proto_path=$(CURDIR)/rustplus $(CURDIR)/rustplus/rustplus.proto

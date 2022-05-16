@@ -10,6 +10,7 @@ require (
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/joho/godotenv v1.4.0
 	github.com/sacOO7/gowebsocket v0.0.0-20210515122958-9396f1a71e23
+	google.golang.org/protobuf v1.28.0
 )
 
 require (
